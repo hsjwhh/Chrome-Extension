@@ -1,0 +1,43 @@
+{
+  "manifest_version": 2,
+
+  "name": "DingTalk Report",
+  "description": "The Extension For HQ",
+  "version": "0.01",
+  "icons": {
+    "16": "images/PNG_16.png",
+    "48": "images/PNG_48.png",
+    "128": "images/PNG_128.png"
+  },
+
+  "browser_action": {
+    "default_icon": {
+      "19": "images/PNG_19.png",
+      "38": "images/PNG_38.png"
+    },
+    "default_title": "DingTalk Report"
+  },
+  "permissions": [
+    "tabs",
+    "notifications",
+    "contextMenus",
+    "storage",
+    "downloads"
+  ],
+  "background": {
+    "scripts": [ "background.js" ],
+    "persistent": false
+  },
+  "content_scripts": [
+    {
+      "matches": [ "https://*.dingtalk.com/*" ],
+      "js": [ "jquery-1.11.3.min.js", "content_script.js" ]
+    }
+  ]
+/***
+  "options_ui": {
+    "page": "options.html",    
+    "chrome_style": true
+  }
+  ***/
+}

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <title>选项</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.4.1/dist/css/bootstrap.min.css"
+          integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf2SKW@o2h" crossorigin="anonymous">
+</head>
+<body>
+<div class="container">
+    <h5>报表</h5>
+    <form>
+        <div class="form-group row">
+            <label for="dateFrom" class="col-4 col-form-label">开始时间：</label>
+            <div class="col-8">
+                <input class="form-control" type="text" id="dateFrom" placeholder="2020-01-01"/>
+            </div>
+        </div>
+        <div class="form-group row">
+            <label for="dateTo" class="col-4 col-form-label">结束时间：</label>
+            <div class="col-8">
+                <input class="form-control" type="text" id="dateTo" placeholder="2020-01-01"/>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <p>
+                    <button type="button" class="btn" id="optionFlush">保 存</button>
+                </p>
+            </div>
+        </div>
+    </form>
+</div>
+<script type="text/javascript" src="/options.js"></script>
+</body>
+</html>
+
