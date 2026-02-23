@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Supermicro Scraper",
+  "version": "1.0",
+  "description": "Export Supermicro motherboard specs to CSV",
+  "action": {
+    "default_title": "点击抓取",
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "https://www.supermicro.com/*"
+  ]
+}
