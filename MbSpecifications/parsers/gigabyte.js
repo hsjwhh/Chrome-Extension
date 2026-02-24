@@ -1,4 +1,4 @@
-export function parseGigabyte() {
+window.parseGigabyte = function parseGigabyte() {
 
   function getModelFromURL() {
     const path = location.pathname.replace(/\/$/, "");

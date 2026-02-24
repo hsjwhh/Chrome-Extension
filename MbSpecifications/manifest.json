@@ -17,16 +17,5 @@
   "host_permissions": [
     "https://www.supermicro.com/*",
     "https://www.gigabyte.cn/*"
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "parsers/*.js"
-      ],
-      "matches": [
-        "https://www.supermicro.com/*",
-        "https://www.gigabyte.cn/*"
-      ]
-    }
   ]
 }

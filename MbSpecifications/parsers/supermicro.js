@@ -1,4 +1,4 @@
-export function parseSupermicro() {
+window.parseSupermicro = function parseSupermicro() {
   const result = {
     URL: location.href,
     Model: '',
