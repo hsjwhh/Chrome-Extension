@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Supermicro Scraper",
+  "name": "Motherboard Specs Scraper",
   "version": "1.0",
   "description": "Export Motherboard Specs to CSV",
   "action": {
@@ -15,7 +15,8 @@
     "service_worker": "background.js"
   },
   "host_permissions": [
-    "https://www.supermicro.com/*"
+    "https://www.supermicro.com/*",
+    "https://www.gigabyte.cn/*"
   ],
   "web_accessible_resources": [
     {
@@ -23,7 +24,8 @@
         "parsers/*.js"
       ],
       "matches": [
-        "https://www.supermicro.com/*"
+        "https://www.supermicro.com/*",
+        "https://www.gigabyte.cn/*"
       ]
     }
   ]

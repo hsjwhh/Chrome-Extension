@@ -7,7 +7,7 @@
       exportName: "parseSupermicro"
     },
     {
-      match: host => host.includes("gigabyte.com"),
+      match: host => host.includes("gigabyte.cn"),
       module: "./parsers/gigabyte.js",
       exportName: "parseGigabyte"
     }
