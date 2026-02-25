@@ -10,6 +10,11 @@ const PARSER_MAP = [
     exportName: "parseSupermicro"
   },
   {
+    match: host => host.includes("supermicro.org.cn"),
+    file: "parsers/supermicro.js",
+    exportName: "parseSupermicro"
+  },
+  {
     match: host => host.includes("gigabyte.cn"),
     file: "parsers/gigabyte.js",
     exportName: "parseGigabyte"

@@ -16,6 +16,7 @@
   },
   "host_permissions": [
     "https://www.supermicro.com/*",
+    "https://www.supermicro.org.cn/*",
     "https://www.gigabyte.cn/*"
   ]
 }
