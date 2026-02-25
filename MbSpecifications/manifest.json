@@ -1,22 +1,29 @@
 {
   "manifest_version": 3,
-  "name": "Motherboard Specs Scraper",
-  "version": "1.0",
-  "description": "Export Motherboard Specs to CSV",
-  "action": {
-    "default_title": "点击抓取",
-    "default_popup": "popup.html"
-  },
+  "name": "Server Board Scraper",
+  "version": "2.0",
+  "description": "Export motherboard specs to CSV or clipboard",
   "permissions": [
-    "activeTab",
-    "scripting"
+    "scripting",
+    "clipboardWrite"
   ],
   "background": {
     "service_worker": "background.js"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.supermicro.com/en/products/motherboard/*",
+        "https://www.supermicro.org.cn/en/products/motherboard/*",
+        "https://www.gigabyte.com/Motherboard/*"
+      ],
+      "js": ["ui.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "host_permissions": [
     "https://www.supermicro.com/*",
     "https://www.supermicro.org.cn/*",
-    "https://www.gigabyte.cn/*"
+    "https://www.gigabyte.com/*"
   ]
 }
