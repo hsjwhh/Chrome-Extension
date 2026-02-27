@@ -15,7 +15,7 @@
       "matches": [
         "https://www.supermicro.com/en/products/motherboard/*",
         "https://www.supermicro.org.cn/en/products/motherboard/*",
-        "https://www.gigabyte.com/Motherboard/*"
+        "https://www.gigabyte.cn/Enterprise/Server-Motherboard/*"
       ],
       "js": ["ui.js"],
       "run_at": "document_idle"
@@ -24,6 +24,6 @@
   "host_permissions": [
     "https://www.supermicro.com/*",
     "https://www.supermicro.org.cn/*",
-    "https://www.gigabyte.com/*"
+    "https://www.gigabyte.cn/*"
   ]
 }

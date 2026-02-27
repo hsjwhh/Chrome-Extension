@@ -9,8 +9,8 @@ const PARSER_MAP = [
   },
   {
     match: (host, path) =>
-      host.includes("gigabyte.com") &&
-      path.startsWith("/Motherboard/"),
+      host.includes("gigabyte.cn") &&
+      path.startsWith("/Enterprise/Server-Motherboard/"),
     file: "parsers/gigabyte.js",
     exportName: "parseGigabyte"
   }
