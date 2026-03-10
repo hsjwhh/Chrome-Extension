@@ -15,90 +15,137 @@ window.parseSupermicro = function parseSupermicro() {
     存储接口: ''
   };
 
-
-  const title = document.title;   // "H12DSi-N6 | Motherboards | Super Micro Computer, Inc."
+  const title = document.title;
   result.Model = title.split('|')[0].trim();
 
-  const tables = document.querySelectorAll('.sys-spec-table.active-tab table.spec-table-1');
+  // ─── 第一优先级：从 Key Features (概览页) 提取数据 ────────────────────────
+  const kfList = document.querySelectorAll('.key-feature-list li');
+  if (kfList.length > 0) {
+    kfList.forEach(li => {
+      const text = li.innerText.trim();
+
+      // 提取 CPU/路数/接口
+      if (!result.CPU类型 && /processor/i.test(text)) {
+        result.CPU类型 = text;
+      }
+      if (!result.几路CPU) {
+        if (/Dual Socket/i.test(text)) result.几路CPU = '2';
+        else if (/Single Socket/i.test(text)) result.几路CPU = '1';
+      }
+      if (!result.CPU接口) {
+        const socketMatch = text.match(/LGA[-\d+]+/i);
+        if (socketMatch) result.CPU接口 = socketMatch[0];
+      }
+
+      // 提取 TDP
+      if (!result.最大TDP) {
+        const tdpMatch = text.match(/(\d+W)\s*TDP/i) || text.match(/up to\s+(\d+W)/i);
+        if (tdpMatch) result.最大TDP = tdpMatch[1];
+      }
+
+      // 提取 内存 (DIMM 数量, 类型, 最大容量)
+      if (!result.DIMM数量) {
+        const dimmMatch = text.match(/(\d+)\s*DIMM\s*slots/i);
+        if (dimmMatch) result.DIMM数量 = dimmMatch[1];
+      }
+      if (!result.内存类型 && /DDR\d/i.test(text)) {
+        const memPart = text.match(/DDR\d[-\w\/]*/i);
+        if (memPart) result.内存类型 = memPart[0];
+      }
+      if (!result.最大内存 && /Up to\s+[\d.]+[TB|GB]/i.test(text)) {
+        const maxMemMatch = text.match(/Up to\s+([\d.]+[TB|GB])/i);
+        if (maxMemMatch) result.最大内存 = maxMemMatch[1];
+      }
+
+      // 提取 M.2
+      if (!result.M2 && /M\.2/i.test(text)) {
+        result.M2 = text;
+      }
+    });
+  }
+
+  // ─── 第二优先级：从详细规格表 (Specifications) 补全缺失数据 ───────────────
+  const tables = document.querySelectorAll('.sys-spec-table.active-tab table.spec-table-1, .tab-specs-more.active table.spec-table-1, table.spec-table-1');
 
   tables.forEach(table => {
-
     const rows = table.querySelectorAll('tr');
-
     rows.forEach(row => {
-
       const feature = row.querySelector('td.feature');
       const desc = row.querySelector('td.description');
       if (!feature || !desc) return;
 
       const key = feature.innerText.trim();
-      const values = Array.from(desc.querySelectorAll('li'))
-        .map(li => li.innerText.trim());
-
+      const values = Array.from(desc.querySelectorAll('li')).map(li => li.innerText.trim());
       const text = values.join('; ');
 
+      // CPU 相关补全
       if (key === 'CPU') {
-
-        result.CPU类型 = values[0] || '';
+        if (!result.CPU类型) result.CPU类型 = values[0] || '';
 
         values.forEach(v => {
-
-          const socketMatch = v.match(/LGA[-\d+]+/i);
-          if (socketMatch) result.CPU接口 = socketMatch[0];
-
-          if (/Dual/i.test(v)) result.几路CPU = '2';
-          if (/Single/i.test(v)) result.几路CPU = '1';
-
-          const tdpMatch = v.match(/Up to\s+(\d+W)/i);
-          if (tdpMatch) result.最大TDP = tdpMatch[1];
+          if (!result.CPU接口) {
+            const socketMatch = v.match(/LGA[-\d+]+/i);
+            if (socketMatch) result.CPU接口 = socketMatch[0];
+          }
+          if (!result.几路CPU) {
+            if (/Dual/i.test(v)) result.几路CPU = '2';
+            else if (/Single/i.test(v)) result.几路CPU = '1';
+          }
+          if (!result.最大TDP) {
+            const tdpMatch = v.match(/Up to\s+(\d+W)/i);
+            if (tdpMatch) result.最大TDP = tdpMatch[1];
+          }
         });
       }
 
+      // 内存容量补全
       if (key.includes('Memory Capacity')) {
-
-        const dimmLine = values.find(v => /DIMM\s+slots/i.test(v));
-        if (dimmLine) {
-          const dimmMatch = dimmLine.match(/(\d+)\s*DIMM/i);
-          if (dimmMatch) result.DIMM数量 = dimmMatch[1];
+        if (!result.DIMM数量) {
+          const dimmLine = values.find(v => /DIMM\s+slots/i.test(v));
+          if (dimmLine) {
+            const dimmMatch = dimmLine.match(/(\d+)\s*DIMM/i);
+            if (dimmMatch) result.DIMM数量 = dimmMatch[1];
+          }
         }
-
-        const maxMemLine = values.find(v => /Up to/i.test(v));
-        if (maxMemLine) {
-          result.最大内存 = maxMemLine.replace(/Up to/i, '').trim();
+        if (!result.最大内存) {
+          const maxMemLine = values.find(v => /Up to/i.test(v));
+          if (maxMemLine) result.最大内存 = maxMemLine.replace(/Up to/i, '').trim();
         }
       }
 
-      if (key.includes('Memory Type')) {
+      // 内存类型补全
+      if (key.includes('Memory Type') && !result.内存类型) {
         result.内存类型 = text;
       }
 
+      // PCI 相关
       if (/PCI(?:e|-E|[-\s]?Express)/i.test(key)) {
-        result.PCI分布 = text;
-
-        const matches = text.match(/(\d+)\s*(?:PCI(?:e|-E|[-\s]?Express))/gi);
-
-        if (matches) {
-          const total = matches
-            .map(m => parseInt(m.match(/\d+/)[0]))
-            .reduce((a, b) => a + b, 0);
-
-          result.PCI槽数量 = total.toString();
+        if (!result.PCI分布) result.PCI分布 = text;
+        if (!result.PCI槽数量) {
+          const matches = text.match(/(\d+)\s*(?:PCI(?:e|-E|[-\s]?Express))/gi);
+          if (matches) {
+            const total = matches
+              .map(m => parseInt(m.match(/\d+/)[0]))
+              .reduce((a, b) => a + b, 0);
+            result.PCI槽数量 = total.toString();
+          }
         }
       }
 
-      if (typeof key === 'string' && key.trim().startsWith('M.2')) {
+      // M.2 补全
+      if (key.trim().startsWith('M.2') && !result.M2) {
         const lines = Array.from(desc.querySelectorAll('li'))
           .map(li => li.textContent.replace(/\s+/g, ' ').trim())
           .filter(Boolean);
-
         result.M2 = lines.join(' | ');
       }
 
-      if (key.includes('SATA') || key.includes('Storage')) {
+      // 存储接口
+      if ((key.includes('SATA') || key.includes('Storage')) && !result.存储接口) {
         result.存储接口 = text;
       }
-
     });
   });
+
   return result;
 }
