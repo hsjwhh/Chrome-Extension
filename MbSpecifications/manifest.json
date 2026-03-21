@@ -5,7 +5,8 @@
   "description": "Export motherboard specs to CSV or clipboard",
   "permissions": [
     "scripting",
-    "clipboardWrite"
+    "clipboardWrite",
+    "storage"
   ],
   "background": {
     "service_worker": "background.js"
@@ -13,6 +14,7 @@
   "content_scripts": [
     {
       "matches": [
+        "https://www.asus.com/motherboards-components/motherboards/*",
         "https://www.supermicro.com/en/products/motherboard/*",
         "https://www.supermicro.org.cn/en/products/motherboard/*",
         "https://www.gigabyte.cn/Enterprise/Server-Motherboard/*"
@@ -22,6 +24,8 @@
     }
   ],
   "host_permissions": [
+    "http://localhost:3000/*",
+    "https://www.asus.com/*",
     "https://www.supermicro.com/*",
     "https://www.supermicro.org.cn/*",
     "https://www.gigabyte.cn/*"

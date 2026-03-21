@@ -2,6 +2,27 @@
   // 防止重复注入（SPA 页面跳转时 content_scripts 不会重新执行，但保险起见保留）
   if (document.getElementById('__scraper_bar__')) return;
 
+  const FIELD_CONFIG = [
+    { apiKey: 'model', label: '主板型号', sourceKey: 'Model' },
+    { apiKey: 'product_collection', label: '产品系列', sourceKey: 'CPU类型', multiline: true },
+    { apiKey: 'sockets', label: 'CPU接口', sourceKey: 'CPU接口' },
+    { apiKey: 'cpu_number', label: 'CPU路数', sourceKey: '几路CPU' },
+    { apiKey: 'max_tdp', label: '最大TDP', sourceKey: '最大TDP' },
+    { apiKey: 'memory_type', label: '内存类型', sourceKey: '内存类型', multiline: true },
+    { apiKey: 'dimm_number', label: 'DIMM数量', sourceKey: 'DIMM数量' },
+    { apiKey: 'max_memory', label: '最大内存', sourceKey: '最大内存', multiline: true },
+    { apiKey: 'pcie_number', label: 'PCI槽数量', sourceKey: 'PCI槽数量' },
+    { apiKey: 'pcie_list', label: 'PCI分布', sourceKey: 'PCI分布', multiline: true },
+    { apiKey: 'm2', label: 'M.2', sourceKey: 'M2', multiline: true },
+    { apiKey: 'input', label: '存储接口', sourceKey: '存储接口', multiline: true },
+    { apiKey: 'url', label: '页面URL', sourceKey: 'URL', multiline: true }
+  ];
+  const DEFAULT_API_BASE_URL = 'http://localhost:3000';
+  const STORAGE_KEYS = {
+    baseUrl: 'mbScraper.apiBaseUrl',
+    username: 'mbScraper.apiUsername'
+  };
+
   // ─── 样式 ────────────────────────────────────────────────────────────────────
   const style = document.createElement('style');
   style.textContent = `
@@ -67,6 +88,11 @@
       color: #94a3b8;
       border: 1px solid #334155;
     }
+    #__scraper_bar__ .btn-check {
+      background: #0f766e;
+      color: #ecfeff;
+      border: 1px solid #115e59;
+    }
     #__scraper_bar__ .scraper-status {
       font-size: 12px;
       color: #64748b;
@@ -74,6 +100,208 @@
     }
     #__scraper_bar__ .scraper-status.ok  { color: #34d399; }
     #__scraper_bar__ .scraper-status.err { color: #f87171; }
+    #__scraper_modal_mask__ {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      z-index: 2147483646;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    #__scraper_modal__ {
+      width: min(900px, 100%);
+      max-height: min(80vh, 900px);
+      overflow: auto;
+      background: #ffffff;
+      color: #0f172a;
+      border-radius: 14px;
+      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    #__scraper_modal__ * {
+      box-sizing: border-box;
+    }
+    #__scraper_modal__ .modal-head {
+      padding: 20px 24px 12px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    #__scraper_modal__ .modal-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    #__scraper_modal__ .modal-desc {
+      margin: 8px 0 0;
+      color: #475569;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    #__scraper_modal__ .modal-body {
+      padding: 20px 24px;
+      display: grid;
+      gap: 14px;
+    }
+    #__scraper_modal__ .map-row {
+      display: grid;
+      grid-template-columns: 140px 1fr 1.2fr;
+      gap: 12px;
+      align-items: start;
+    }
+    #__scraper_modal__ .map-label {
+      padding-top: 10px;
+      font-size: 13px;
+      color: #0f172a;
+      font-weight: 600;
+    }
+    #__scraper_modal__ .map-source {
+      min-height: 40px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      color: #475569;
+      font-size: 13px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #__scraper_modal__ .map-input,
+    #__scraper_modal__ .map-textarea {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: #0f172a;
+      background: #fff;
+    }
+    #__scraper_modal__ .map-textarea {
+      min-height: 74px;
+      resize: vertical;
+      font-family: inherit;
+    }
+    #__scraper_modal__ .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 16px 24px 24px;
+      border-top: 1px solid #e2e8f0;
+    }
+    #__scraper_modal__ .modal-btn {
+      all: initial;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 9px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    #__scraper_modal__ .modal-btn.secondary {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    #__scraper_modal__ .modal-btn.primary {
+      background: #0f766e;
+      color: #fff;
+    }
+    #__scraper_modal__ .modal-btn.ghost {
+      background: #fff;
+      color: #0f172a;
+      border: 1px solid #cbd5e1;
+    }
+    #__scraper_modal__ .modal-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    #__scraper_modal__ .modal-error {
+      padding: 0 24px 16px;
+      color: #b91c1c;
+      font-size: 13px;
+      display: none;
+    }
+    @media (max-width: 860px) {
+      #__scraper_modal__ .map-row {
+        grid-template-columns: 1fr;
+      }
+      #__scraper_modal__ .map-label {
+        padding-top: 0;
+      }
+    }
+    #__scraper_auth_mask__ {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.55);
+      z-index: 2147483647;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    #__scraper_auth__ {
+      width: min(440px, 100%);
+      background: #ffffff;
+      color: #0f172a;
+      border-radius: 14px;
+      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+    #__scraper_auth__ .auth-head {
+      padding: 20px 24px 12px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    #__scraper_auth__ .auth-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    #__scraper_auth__ .auth-desc {
+      margin: 8px 0 0;
+      color: #475569;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    #__scraper_auth__ .auth-body {
+      padding: 20px 24px;
+      display: grid;
+      gap: 14px;
+    }
+    #__scraper_auth__ .auth-field {
+      display: grid;
+      gap: 6px;
+    }
+    #__scraper_auth__ .auth-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    #__scraper_auth__ .auth-input {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      color: #0f172a;
+      background: #fff;
+    }
+    #__scraper_auth__ .auth-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 16px 24px 24px;
+      border-top: 1px solid #e2e8f0;
+    }
+    #__scraper_auth__ .auth-error {
+      padding: 0 24px 16px;
+      color: #b91c1c;
+      font-size: 13px;
+      display: none;
+    }
   `;
   document.head.appendChild(style);
 
@@ -85,6 +313,7 @@
     <span class="scraper-model" id="__scraper_model__">—</span>
     <button class="scraper-btn btn-csv"  id="__scraper_csv__">↓ 导出 CSV</button>
     <button class="scraper-btn btn-copy" id="__scraper_copy__">⎘ 复制一行</button>
+    <button class="scraper-btn btn-check" id="__scraper_check__">⇄ 检查入库</button>
     <span  class="scraper-status"        id="__scraper_status__"></span>
   `;
 
@@ -94,7 +323,69 @@
   const modelEl  = document.getElementById('__scraper_model__');
   const csvBtn   = document.getElementById('__scraper_csv__');
   const copyBtn  = document.getElementById('__scraper_copy__');
+  const checkBtn = document.getElementById('__scraper_check__');
   const statusEl = document.getElementById('__scraper_status__');
+
+  const modalMask = document.createElement('div');
+  modalMask.id = '__scraper_modal_mask__';
+  modalMask.innerHTML = `
+    <div id="__scraper_modal__" role="dialog" aria-modal="true" aria-labelledby="__scraper_modal_title__">
+      <div class="modal-head">
+        <h2 class="modal-title" id="__scraper_modal_title__">主板映射审核</h2>
+        <p class="modal-desc">库中未找到当前主板。请确认抓取字段与入库字段的映射，必要时可以直接修改后再提交。</p>
+      </div>
+      <div class="modal-body" id="__scraper_modal_body__"></div>
+      <div class="modal-error" id="__scraper_modal_error__"></div>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" id="__scraper_modal_cancel__">取消</button>
+        <button class="modal-btn primary" id="__scraper_modal_confirm__">确认写库</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modalMask);
+
+  const modalBody = document.getElementById('__scraper_modal_body__');
+  const modalError = document.getElementById('__scraper_modal_error__');
+  const modalCancelBtn = document.getElementById('__scraper_modal_cancel__');
+  const modalConfirmBtn = document.getElementById('__scraper_modal_confirm__');
+
+  const authMask = document.createElement('div');
+  authMask.id = '__scraper_auth_mask__';
+  authMask.innerHTML = `
+    <div id="__scraper_auth__" role="dialog" aria-modal="true" aria-labelledby="__scraper_auth_title__">
+      <div class="auth-head">
+        <h2 class="auth-title" id="__scraper_auth_title__">API 认证</h2>
+        <p class="auth-desc">请输入 API 地址、用户名和密码。扩展只会长期保存 API 地址和用户名，密码不会被持久化保存。</p>
+      </div>
+      <div class="auth-body">
+        <label class="auth-field">
+          <span class="auth-label">API 地址</span>
+          <input class="auth-input" id="__scraper_auth_base__" value="${escapeAttr(DEFAULT_API_BASE_URL)}" placeholder="http://localhost:3000">
+        </label>
+        <label class="auth-field">
+          <span class="auth-label">用户名</span>
+          <input class="auth-input" id="__scraper_auth_user__" placeholder="请输入用户名">
+        </label>
+        <label class="auth-field">
+          <span class="auth-label">密码</span>
+          <input class="auth-input" id="__scraper_auth_pass__" type="password" placeholder="请输入密码">
+        </label>
+      </div>
+      <div class="auth-error" id="__scraper_auth_error__"></div>
+      <div class="auth-actions">
+        <button class="modal-btn ghost" id="__scraper_auth_cancel__">取消</button>
+        <button class="modal-btn primary" id="__scraper_auth_confirm__">继续</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(authMask);
+
+  const authBaseInput = document.getElementById('__scraper_auth_base__');
+  const authUserInput = document.getElementById('__scraper_auth_user__');
+  const authPassInput = document.getElementById('__scraper_auth_pass__');
+  const authError = document.getElementById('__scraper_auth_error__');
+  const authCancelBtn = document.getElementById('__scraper_auth_cancel__');
+  const authConfirmBtn = document.getElementById('__scraper_auth_confirm__');
 
   // ─── 状态提示 ────────────────────────────────────────────────────────────────
   let statusTimer = null;
@@ -107,6 +398,140 @@
 
   // ─── 解析缓存（避免重复请求 background 注入） ─────────────────────────────
   let cachedResult = null;
+  let modalState = null;
+  let apiConfig = {
+    baseUrl: DEFAULT_API_BASE_URL,
+    username: '',
+    password: ''
+  };
+  let authResolver = null;
+  const initialConfigLoad = loadSavedApiConfig();
+
+  function setBusy(isBusy) {
+    csvBtn.disabled = isBusy;
+    copyBtn.disabled = isBusy;
+    checkBtn.disabled = isBusy;
+  }
+
+  function toApiPayload(result) {
+    const payload = {};
+    FIELD_CONFIG.forEach(field => {
+      payload[field.apiKey] = result[field.sourceKey] || '';
+    });
+    return payload;
+  }
+
+  function openModal(payload, result) {
+    modalState = { payload, result };
+    modalBody.innerHTML = FIELD_CONFIG.map(field => {
+      const sourceValue = result[field.sourceKey] || '';
+      const inputValue = payload[field.apiKey] || '';
+      const control = field.multiline
+        ? `<textarea class="map-textarea" data-api-key="${field.apiKey}">${escapeHtml(inputValue)}</textarea>`
+        : `<input class="map-input" data-api-key="${field.apiKey}" value="${escapeAttr(inputValue)}">`;
+
+      return `
+        <div class="map-row">
+          <div class="map-label">${escapeHtml(field.label)}<br><span style="color:#64748b;font-weight:500">${escapeHtml(field.apiKey)}</span></div>
+          <div class="map-source">${escapeHtml(sourceValue || '—')}</div>
+          <div>${control}</div>
+        </div>
+      `;
+    }).join('');
+
+    modalError.style.display = 'none';
+    modalError.textContent = '';
+    modalConfirmBtn.disabled = false;
+    modalCancelBtn.disabled = false;
+    modalMask.style.display = 'flex';
+  }
+
+  function closeModal() {
+    modalState = null;
+    modalMask.style.display = 'none';
+    modalBody.innerHTML = '';
+    modalError.style.display = 'none';
+    modalError.textContent = '';
+  }
+
+  function collectModalPayload() {
+    const payload = {};
+    modalBody.querySelectorAll('[data-api-key]').forEach(el => {
+      payload[el.dataset.apiKey] = el.value.trim();
+    });
+    return payload;
+  }
+
+  function showModalError(message) {
+    modalError.textContent = message;
+    modalError.style.display = 'block';
+  }
+
+  function openAuthModal() {
+    authBaseInput.value = apiConfig.baseUrl || DEFAULT_API_BASE_URL;
+    authUserInput.value = apiConfig.username || '';
+    authPassInput.value = '';
+    authError.style.display = 'none';
+    authError.textContent = '';
+    authMask.style.display = 'flex';
+    setTimeout(() => authUserInput.focus(), 0);
+  }
+
+  function closeAuthModal() {
+    authMask.style.display = 'none';
+    authError.style.display = 'none';
+    authError.textContent = '';
+  }
+
+  function showAuthError(message) {
+    authError.textContent = message;
+    authError.style.display = 'block';
+  }
+
+  function hasApiConfig() {
+    return Boolean(
+      String(apiConfig.baseUrl || '').trim() &&
+      String(apiConfig.username || '').trim()
+    );
+  }
+
+  function getApiConfig() {
+    return {
+      baseUrl: String(apiConfig.baseUrl || '').trim(),
+      username: String(apiConfig.username || '').trim(),
+      password: String(apiConfig.password || '')
+    };
+  }
+
+  async function ensureApiConfig(forcePrompt = false) {
+    await initialConfigLoad;
+
+    if (!forcePrompt && hasApiConfig()) return getApiConfig();
+
+    return new Promise((resolve, reject) => {
+      authResolver = { resolve, reject };
+      openAuthModal();
+    });
+  }
+
+  async function sendAuthorizedMessage(action, payloadFactory) {
+    let currentApiConfig = await ensureApiConfig(false);
+    let resp = await chrome.runtime.sendMessage({
+      action,
+      payload: payloadFactory(currentApiConfig)
+    });
+
+    if (resp?.ok || resp?.reason !== 'auth_required') {
+      return resp;
+    }
+
+    apiConfig.password = '';
+    currentApiConfig = await ensureApiConfig(true);
+    return chrome.runtime.sendMessage({
+      action,
+      payload: payloadFactory(currentApiConfig)
+    });
+  }
 
   async function getResult() {
     // 如果已有缓存且页面 URL 未变则直接复用
@@ -115,21 +540,21 @@
     }
 
     setStatus('解析中…');
-    csvBtn.disabled = copyBtn.disabled = true;
+    setBusy(true);
 
     // 让 background 注入对应 parser
     const resp = await chrome.runtime.sendMessage({ action: 'injectParser' });
 
     if (!resp.ok) {
       setStatus('✗ ' + resp.reason, 'err');
-      csvBtn.disabled = copyBtn.disabled = false;
+      setBusy(false);
       return null;
     }
 
     const parserFn = window[resp.exportName];
     if (typeof parserFn !== 'function') {
       setStatus('✗ 解析器未挂载', 'err');
-      csvBtn.disabled = copyBtn.disabled = false;
+      setBusy(false);
       return null;
     }
 
@@ -139,13 +564,13 @@
     } catch (e) {
       console.error('[Scraper]', e);
       setStatus('✗ 解析异常', 'err');
-      csvBtn.disabled = copyBtn.disabled = false;
+      setBusy(false);
       return null;
     }
 
     if (!result) {
       setStatus('✗ 无数据', 'err');
-      csvBtn.disabled = copyBtn.disabled = false;
+      setBusy(false);
       return null;
     }
 
@@ -154,7 +579,7 @@
 
     // 显示型号名
     modelEl.textContent = result.Model || '（未识别型号）';
-    csvBtn.disabled = copyBtn.disabled = false;
+    setBusy(false);
     setStatus('');
 
     return result;
@@ -196,6 +621,90 @@
     }
   });
 
+  checkBtn.addEventListener('click', async () => {
+    const result = await getResult();
+    if (!result) return;
+
+    const payload = toApiPayload(result);
+    setStatus('查询库中…');
+    setBusy(true);
+
+    try {
+      const resp = await sendAuthorizedMessage(
+        'checkMotherboard',
+        currentApiConfig => ({
+          apiConfig: currentApiConfig,
+          model: payload.model,
+          url: payload.url
+        })
+      );
+
+      if (!resp.ok) {
+        setStatus('✗ ' + humanizeError(resp.reason), 'err');
+        return;
+      }
+
+      if (resp.exists) {
+        const existingModel = resp.existing?.model || payload.model;
+        setStatus(`✓ 已存在：${existingModel}`, 'ok');
+        return;
+      }
+
+      openModal(payload, result);
+      setStatus('未找到，等待确认', 'err');
+    } catch (error) {
+      setStatus('✗ ' + humanizeError(error?.message), 'err');
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  modalMask.addEventListener('click', (event) => {
+    if (event.target === modalMask) closeModal();
+  });
+
+  modalCancelBtn.addEventListener('click', () => {
+    closeModal();
+    setStatus('已取消写库');
+  });
+
+  modalConfirmBtn.addEventListener('click', async () => {
+    if (!modalState) return;
+
+    const payload = collectModalPayload();
+    if (!payload.model) {
+      showModalError('主板型号不能为空');
+      return;
+    }
+
+    modalConfirmBtn.disabled = true;
+    modalCancelBtn.disabled = true;
+    showModalError('');
+
+    try {
+      const resp = await sendAuthorizedMessage(
+        'createMotherboard',
+        currentApiConfig => ({
+          apiConfig: currentApiConfig,
+          data: payload
+        })
+      );
+
+      if (!resp.ok) {
+        showModalError('写库失败：' + humanizeError(resp.reason));
+        return;
+      }
+
+      closeModal();
+      setStatus('✓ 已写入主板库', 'ok');
+    } catch (error) {
+      showModalError('写库失败：' + humanizeError(error?.message));
+    } finally {
+      modalConfirmBtn.disabled = false;
+      modalCancelBtn.disabled = false;
+    }
+  });
+
   // ─── 工具：导出 CSV ──────────────────────────────────────────────────────────
   function exportCSV(result) {
     function escapeCSV(value) {
@@ -222,5 +731,105 @@
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
   }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function escapeAttr(value) {
+    return escapeHtml(value).replace(/"/g, '&quot;');
+  }
+
+  function humanizeError(reason) {
+    if (reason === 'auth_cancelled') return '已取消认证输入';
+    if (reason === 'auth_required') return '登录已失效，请重新输入密码';
+    if (reason === 'missing_base_url') return '缺少 API 地址';
+    if (reason === 'missing_username') return '缺少用户名';
+    if (reason === 'missing_password') return '缺少密码';
+    if (reason === 'missing_model') return '缺少主板型号';
+    if (reason === 'model_too_short') return '主板型号长度不足，无法查询';
+    return reason || '未知错误';
+  }
+
+  function storageGet(area, keys) {
+    return new Promise(resolve => {
+      chrome.storage[area].get(keys, resolve);
+    });
+  }
+
+  function storageSet(area, value) {
+    return new Promise(resolve => {
+      chrome.storage[area].set(value, resolve);
+    });
+  }
+
+  async function loadSavedApiConfig() {
+    const localData = await storageGet('local', [
+      STORAGE_KEYS.baseUrl,
+      STORAGE_KEYS.username
+    ]);
+
+    apiConfig = {
+      baseUrl: localData[STORAGE_KEYS.baseUrl] || DEFAULT_API_BASE_URL,
+      username: localData[STORAGE_KEYS.username] || '',
+      password: ''
+    };
+  }
+
+  async function saveApiConfig(config) {
+    await storageSet('local', {
+      [STORAGE_KEYS.baseUrl]: config.baseUrl,
+      [STORAGE_KEYS.username]: config.username
+    });
+  }
+
+  authMask.addEventListener('click', (event) => {
+    if (event.target !== authMask) return;
+    closeAuthModal();
+    if (authResolver) {
+      authResolver.reject(new Error('auth_cancelled'));
+      authResolver = null;
+    }
+  });
+
+  authCancelBtn.addEventListener('click', () => {
+    closeAuthModal();
+    if (authResolver) {
+      authResolver.reject(new Error('auth_cancelled'));
+      authResolver = null;
+    }
+  });
+
+  authConfirmBtn.addEventListener('click', async () => {
+    const nextConfig = {
+      baseUrl: authBaseInput.value.trim(),
+      username: authUserInput.value.trim(),
+      password: authPassInput.value
+    };
+
+    if (!nextConfig.baseUrl) {
+      showAuthError('请输入 API 地址');
+      return;
+    }
+    if (!nextConfig.username) {
+      showAuthError('请输入用户名');
+      return;
+    }
+    if (!nextConfig.password) {
+      showAuthError('请输入密码');
+      return;
+    }
+
+    apiConfig = nextConfig;
+    await saveApiConfig(nextConfig);
+    closeAuthModal();
+    if (authResolver) {
+      authResolver.resolve(getApiConfig());
+      authResolver = null;
+    }
+  });
 
 })();

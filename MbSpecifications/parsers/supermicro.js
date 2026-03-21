@@ -1,4 +1,5 @@
 window.parseSupermicro = function parseSupermicro() {
+  const SOCKET_PATTERN = /\b(?:AM\d+|LGA[- ]?\d+|SP\d+|sTR\d+|TR\d+|sTRX\d+|sWRX\d+)\b/i;
   const result = {
     URL: location.href,
     Model: '',
@@ -33,7 +34,7 @@ window.parseSupermicro = function parseSupermicro() {
         else if (/Single Socket/i.test(text)) result.几路CPU = '1';
       }
       if (!result.CPU接口) {
-        const socketMatch = text.match(/LGA[-\d+]+/i);
+        const socketMatch = text.match(SOCKET_PATTERN);
         if (socketMatch) result.CPU接口 = socketMatch[0];
       }
 
@@ -84,7 +85,7 @@ window.parseSupermicro = function parseSupermicro() {
 
         values.forEach(v => {
           if (!result.CPU接口) {
-            const socketMatch = v.match(/LGA[-\d+]+/i);
+            const socketMatch = v.match(SOCKET_PATTERN);
             if (socketMatch) result.CPU接口 = socketMatch[0];
           }
           if (!result.几路CPU) {
