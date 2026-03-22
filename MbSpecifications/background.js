@@ -33,20 +33,21 @@ function normalizeConfig(config) {
   return { baseUrl, username, password };
 }
 
-async function apiRequest(baseUrl, path, options = {}, retryMeta = null) {
+async function apiRequest(baseUrl, path, options = {}) {
   const response = await fetch(`${baseUrl}${path}`, options);
 
-  if (response.status === 401 && retryMeta) {
-    authCache.delete(retryMeta.cacheKey);
-    await storageSessionRemove([retryMeta.storageKey]);
-    return apiRequest(baseUrl, path, options, null);
+  const text = await response.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
   }
 
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
-
   if (!response.ok) {
-    throw new Error(data?.message || `HTTP ${response.status}`);
+    const err = new Error(data?.message || `HTTP ${response.status}`);
+    err.status = response.status;
+    throw err;
   }
 
   return data;
@@ -98,7 +99,7 @@ async function getAccessToken(configInput) {
       username: config.username,
       password: config.password
     })
-  }, { cacheKey, storageKey });
+  });
 
   const nextCache = {
     accessToken: data.accessToken,
@@ -113,17 +114,27 @@ async function getAccessToken(configInput) {
 
 async function authorizedRequest(config, path, options = {}) {
   const normalized = normalizeConfig(config);
-  const token = await getAccessToken(normalized);
-  const headers = new Headers(options.headers || {});
-  headers.set("Authorization", `Bearer ${token}`);
 
-  return apiRequest(normalized.baseUrl, path, {
-    ...options,
-    headers
-  }, {
-    cacheKey: getConfigKey(normalized),
-    storageKey: getTokenStorageKey(normalized)
-  });
+  async function attempt(isRetry) {
+    const token = await getAccessToken(normalized);
+    const headers = new Headers(options.headers || {});
+    headers.set("Authorization", `Bearer ${token}`);
+    try {
+      return await apiRequest(normalized.baseUrl, path, { ...options, headers });
+    } catch (e) {
+      if (e.status === 401 && !isRetry) {
+        // 清除缓存，下次 getAccessToken 会重新登录
+        const cacheKey = getConfigKey(normalized);
+        const storageKey = getTokenStorageKey(normalized);
+        authCache.delete(cacheKey);
+        await storageSessionRemove([storageKey]);
+        return attempt(true);
+      }
+      throw e;
+    }
+  }
+
+  return attempt(false);
 }
 
 async function checkMotherboard(payload) {

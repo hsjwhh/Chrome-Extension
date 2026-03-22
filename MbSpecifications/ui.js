@@ -525,8 +525,15 @@
       return resp;
     }
 
+    // token 失效，清除密码并强制弹出认证框
     apiConfig.password = '';
-    currentApiConfig = await ensureApiConfig(true);
+    try {
+      currentApiConfig = await ensureApiConfig(true);
+    } catch (e) {
+      // 用户取消了认证框
+      return { ok: false, reason: e.message || 'auth_cancelled' };
+    }
+
     return chrome.runtime.sendMessage({
       action,
       payload: payloadFactory(currentApiConfig)
@@ -830,6 +837,10 @@
       authResolver.resolve(getApiConfig());
       authResolver = null;
     }
+  });
+
+  authPassInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') authConfirmBtn.click();
   });
 
 })();
