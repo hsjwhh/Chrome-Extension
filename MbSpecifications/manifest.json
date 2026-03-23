@@ -17,9 +17,12 @@
         "https://www.asus.com/motherboards-components/motherboards/*",
         "https://www.supermicro.com/en/products/motherboard/*",
         "https://www.supermicro.org.cn/en/products/motherboard/*",
-        "https://www.gigabyte.cn/Enterprise/Server-Motherboard/*"
+        "https://www.gigabyte.cn/Enterprise/Server-Motherboard/*",
+        "https://www.aorus.com/zh-tw/motherboards/*"
       ],
-      "js": ["ui.js"],
+      "js": [
+        "ui.js"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -28,6 +31,7 @@
     "https://www.asus.com/*",
     "https://www.supermicro.com/*",
     "https://www.supermicro.org.cn/*",
-    "https://www.gigabyte.cn/*"
+    "https://www.gigabyte.cn/*",
+    "https://www.aorus.com/zh-tw/motherboards/*"
   ]
 }

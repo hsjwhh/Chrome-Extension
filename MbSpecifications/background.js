@@ -208,6 +208,14 @@ const PARSER_MAP = [
       path.startsWith("/Enterprise/Server-Motherboard/"),
     file: "parsers/gigabyte.js",
     exportName: "parseGigabyte"
+  },
+  {
+    match: (host, path) =>
+      host.includes("aorus.com") &&
+      path.includes("/motherboards/") &&
+      path.endsWith("/Specification"),
+    file: "parsers/aorus.js",
+    exportName: "parseAorus"
   }
 ];
 

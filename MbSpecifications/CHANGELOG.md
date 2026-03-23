@@ -7,6 +7,7 @@ The format is based on Keep a Changelog.
 ## [Unreleased]
 
 ### Added
+- Added support for scraping Aorus motherboard specifications (`parsers/aorus.js`).
 - Added motherboard library lookup and create flow against the local hardware API.
 - Added a review modal so scraped motherboard fields can be checked and edited before writing to the database.
 - Added an auth modal for API base URL, username, and password input.
