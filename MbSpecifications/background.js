@@ -156,9 +156,9 @@ async function checkMotherboard(payload) {
   const targetUrl = String(payload?.url || "").trim();
   const existing = Array.isArray(results)
     ? results.find(item =>
-        normalizeModel(item?.model) === targetModel ||
-        (targetUrl && String(item?.url || "").trim() === targetUrl)
-      ) || null
+      normalizeModel(item?.model) === targetModel ||
+      (targetUrl && String(item?.url || "").trim() === targetUrl)
+    ) || null
     : null;
 
   return {
@@ -194,9 +194,9 @@ async function checkCpu(payload) {
 
   const existing = Array.isArray(results)
     ? results.find(item =>
-        normalizeModel(item?.cpu_s_name) === cpuSName ||
-        normalizeModel(item?.cpu_name) === cpuSName
-      ) || null
+      normalizeModel(item?.cpu_s_name) === cpuSName ||
+      normalizeModel(item?.cpu_name) === cpuSName
+    ) || null
     : null;
 
   return {
@@ -257,8 +257,8 @@ const PARSER_MAP = [
   },
   {
     match: (host, path) =>
-      host.includes("intel.cn") &&
-      path.includes("/products/sku/"),
+      /intel\.(cn|com)$/.test(host) &&
+      path.includes("/ark/products/"),
     file: "parsers/intel.js",
     exportName: "parseIntel"
   }
@@ -268,7 +268,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.action === "injectParser") {
     (async () => {
       const tabId = sender.tab.id;
-      const url   = new URL(sender.tab.url);
+      const url = new URL(sender.tab.url);
       const entry = PARSER_MAP.find(p => p.match(url.hostname, url.pathname));
 
       if (!entry) {
@@ -279,7 +279,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       try {
         await chrome.scripting.executeScript({
           target: { tabId, allFrames: true },
-          files:  [entry.file]
+          files: [entry.file]
         });
         sendResponse({ ok: true, exportName: entry.exportName });
       } catch (e) {

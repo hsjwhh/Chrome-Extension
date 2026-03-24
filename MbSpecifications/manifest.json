@@ -20,11 +20,9 @@
         "https://www.gigabyte.cn/Enterprise/Server-Motherboard/*",
         "https://www.aorus.com/zh-tw/motherboards/*",
         "https://www.intel.cn/*",
-        "https://*.intel.cn/*"
+        "https://www.intel.com/*"
       ],
-      "js": [
-        "ui.js"
-      ],
+      "js": ["ui.js"],
       "run_at": "document_idle",
       "all_frames": true
     }
@@ -35,18 +33,8 @@
     "https://www.supermicro.com/*",
     "https://www.supermicro.org.cn/*",
     "https://www.gigabyte.cn/*",
-    "https://www.aorus.com/zh-tw/motherboards/*",
+    "https://www.aorus.com/*",
     "https://www.intel.cn/*",
-    "https://*.intel.cn/*"
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "parsers/*.js"
-      ],
-      "matches": [
-        "https://www.intel.cn/*"
-      ]
-    }
+    "https://www.intel.com/*"
   ]
 }
