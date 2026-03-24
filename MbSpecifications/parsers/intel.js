@@ -186,15 +186,13 @@ window.parseIntel = function parseIntel() {
 
   const specMap = buildSpecMap();
 
-  // 处理器简称优先从“处理器编号”字段获取，其次从全名中提取
-  result.cpu_short_name = pickSpec(specMap, ['处理器编号', 'Processor Number']);
-  if (!result.cpu_short_name) {
-    result.cpu_short_name = result.cpu_name
-      .replace(/Intel(?:®|™)?\s+/i, '')
-      .replace(/\s+Processor/i, '')
-      .trim();
-  }
-  result.cpu_s_name = result.cpu_short_name;
+  // 处理器简称：从全名中提取，保留品牌 (Intel)，剥离产品词 (Processor/处理器)
+  result.cpu_short_name = result.cpu_name
+    .replace(/\s+(?:Processor|处理器)$/i, '')
+    .trim();
+
+  // cpu_s_name 处理规则：英文全部小写、去除所有空格
+  result.cpu_s_name = result.cpu_short_name.toLowerCase().replace(/\s+/g, '');
 
   // ─── 直接映射字段 ─────────────────────────────────────────────────────────
   result.release_date = pickSpec(specMap, ['发行日期', 'Launch Date']);
