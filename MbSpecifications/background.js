@@ -189,7 +189,7 @@ async function checkCpu(payload) {
 
   const results = await authorizedRequest(
     config,
-    `/api/hw/cpu?keyword=${encodeURIComponent(cpuSName)}`
+    `/api/hw/cpu/s-name?keyword=${encodeURIComponent(cpuSName)}`
   );
 
   const existing = Array.isArray(results)
@@ -258,7 +258,7 @@ const PARSER_MAP = [
   {
     match: (host, path) =>
       /intel\.(cn|com)$/.test(host) &&
-      path.includes("/ark/products/"),
+      (path.includes("/products/sku/") || path.includes("/ark/products/")),
     file: "parsers/intel.js",
     exportName: "parseIntel"
   }

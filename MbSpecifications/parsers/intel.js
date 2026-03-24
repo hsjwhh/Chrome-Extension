@@ -126,26 +126,27 @@ window.parseIntel = function parseIntel() {
       });
     }
 
-    // 4. 文本兜底：补齐 DOM 扫描漏掉的字段，而不是只在全空时才执行
+    // 4. 文本兜底：补齐 DOM 扫描漏掉的字段，支持中英文双语
     const keywordGroups = [
-      ['发行日期'],
-      ['内核数'],
-      ['最大睿频频率'],
-      ['缓存'],
-      ['处理器基础功耗'],
-      ['最大睿频功耗'],
-      ['最大内存大小（取决于内存类型）', '最大内存大小 (取决于内存类型)'],
-      ['最大内存通道数'],
-      ['内存类型'],
-      ['支持的 ECC 内存', '支持的 ECC 内存 ‡', '支持的ECC内存'],
-      ['支持的插槽'],
-      ['PCI Express 修订版'],
-      ['PCI Express 通道数的最大值'],
-      ['可扩展性'],
-      ['Performance-core（性能核）基本频率', 'Performance-core(P-core) 基本频率', '处理器基本频率']
+      ['发行日期', 'Launch Date'],
+      ['处理器编号', 'Processor Number'],
+      ['内核数', 'Total Cores'],
+      ['最大睿频频率', 'Max Turbo Frequency'],
+      ['缓存', 'Cache'],
+      ['处理器基础功耗', 'Processor Base Power'],
+      ['最大睿频功耗', 'Maximum Turbo Power'],
+      ['最大内存大小（取决于内存类型）', 'Max Memory Size (dependent on memory type)'],
+      ['最大内存通道数', 'Max # of Memory Channels'],
+      ['内存类型', 'Memory Types'],
+      ['支持的 ECC 内存', 'ECC Memory Supported'],
+      ['支持的插槽', 'Sockets Supported'],
+      ['PCI Express 修订版', 'PCI Express Revision'],
+      ['PCI Express 通道数的最大值', 'Max # of PCI Express Lanes'],
+      ['可扩展性', 'Scalability'],
+      ['Performance-core（性能核）基本频率', 'Performance-core Base Frequency', '处理器基本频率', 'Processor Base Frequency']
     ];
     keywordGroups.forEach(group => {
-      if (map[group[0]]) return;
+      if (group.some(k => map[k])) return;
       for (const kw of group) {
         const regex = new RegExp(escapeRegExp(kw) + '[\\s\\n]+([^\\n]{1,100})', 'i');
         const match = text.match(regex);
@@ -162,6 +163,8 @@ window.parseIntel = function parseIntel() {
   const result = {
     URL:                location.href,
     cpu_name:           '',
+    cpu_short_name:     '',
+    cpu_s_name:         '',
     release_date:       '',
     cores:              '',
     max_turbo:          '',
@@ -183,44 +186,63 @@ window.parseIntel = function parseIntel() {
 
   const specMap = buildSpecMap();
 
+  // 处理器简称优先从“处理器编号”字段获取，其次从全名中提取
+  result.cpu_short_name = pickSpec(specMap, ['处理器编号', 'Processor Number']);
+  if (!result.cpu_short_name) {
+    result.cpu_short_name = result.cpu_name
+      .replace(/Intel(?:®|™)?\s+/i, '')
+      .replace(/\s+Processor/i, '')
+      .trim();
+  }
+  result.cpu_s_name = result.cpu_short_name;
+
   // ─── 直接映射字段 ─────────────────────────────────────────────────────────
-  result.release_date = pickSpec(specMap, ['发行日期']);
-  result.max_turbo = pickSpec(specMap, ['最大睿频频率']);
-  result.cache = pickSpec(specMap, ['缓存']);
+  result.release_date = pickSpec(specMap, ['发行日期', 'Launch Date']);
+  result.max_turbo = pickSpec(specMap, ['最大睿频频率', 'Max Turbo Frequency']);
+  result.cache = pickSpec(specMap, ['缓存', 'Cache']);
   result.max_memory_capacity = pickSpec(specMap, [
     '最大内存大小（取决于内存类型）',
-    '最大内存大小 (取决于内存类型)'
+    '最大内存大小 (取决于内存类型)',
+    'Max Memory Size (dependent on memory type)'
   ]) || extractValueFromPageText([
     '最大内存大小（取决于内存类型）',
-    '最大内存大小 (取决于内存类型)'
+    '最大内存大小 (取决于内存类型)',
+    'Max Memory Size (dependent on memory type)'
   ]);
   result.ecc_support = pickSpec(specMap, [
     '支持的 ECC 内存',
     '支持的 ECC 内存 ‡',
-    '支持的ECC内存'
+    '支持的ECC内存',
+    'ECC Memory Supported'
   ]) || extractValueFromPageText([
     '支持的 ECC 内存',
     '支持的 ECC 内存 ‡',
-    '支持的ECC内存'
+    '支持的ECC内存',
+    'ECC Memory Supported'
   ]);
-  result.socket = pickSpec(specMap, ['支持的插槽']);
-  result.memory_speed = pickSpec(specMap, ['内存类型']);
+  result.socket = pickSpec(specMap, ['支持的插槽', 'Sockets Supported']);
+  result.memory_speed = pickSpec(specMap, ['内存类型', 'Memory Types']);
 
   // ─── 需处理字段 ───────────────────────────────────────────────────────────
 
   // cores: parseInt
-  const coresRaw = pickSpec(specMap, ['内核数']);
+  const coresRaw = pickSpec(specMap, ['内核数', 'Total Cores']);
   if (coresRaw) result.cores = String(parseInt(coresRaw) || '');
 
   // base_freq: 优先取性能核基本频率，降级取通用基本频率
   result.base_freq = pickSpec(specMap, [
     'Performance-core（性能核）基本频率',
     'Performance-core(P-core) 基本频率',
-    '处理器基本频率'
+    'Performance-core Base Frequency',
+    '处理器基本频率',
+    'Processor Base Frequency'
   ]);
 
-  const basePower = pickSpec(specMap, ['处理器基础功耗']) || extractValueFromPageText(['处理器基础功耗']);
-  const maxPower = pickSpec(specMap, ['最大睿频功耗']) || extractValueFromPageText(['最大睿频功耗']);
+  const basePowerLabel = ['处理器基础功耗', 'Processor Base Power'];
+  const maxPowerLabel = ['最大睿频功耗', 'Maximum Turbo Power'];
+  
+  const basePower = pickSpec(specMap, basePowerLabel) || extractValueFromPageText(basePowerLabel);
+  const maxPower = pickSpec(specMap, maxPowerLabel) || extractValueFromPageText(maxPowerLabel);
   if (basePower || maxPower) {
     const powerParts = [];
     if (basePower) powerParts.push(`基础 ${basePower}`);
@@ -229,16 +251,16 @@ window.parseIntel = function parseIntel() {
   }
 
   // memory_channels: parseInt
-  const chRaw = pickSpec(specMap, ['最大内存通道数']);
+  const chRaw = pickSpec(specMap, ['最大内存通道数', 'Max # of Memory Channels']);
   if (chRaw) result.memory_channels = String(parseInt(chRaw) || '');
 
   // max_memory_speed: 从 memory_speed 提取最大 MT/s 数值
-  const mtMatch = result.memory_speed.match(/(\d[\d,]+)\s*MT\/s/i);
+  const mtMatch = result.memory_speed.match(/(\d[\d,]+)\s*(?:MT\/s|MHz)/i);
   if (mtMatch) result.max_memory_speed = mtMatch[1].replace(/,/g, '') + ' MT/s';
 
   // pci: 拼接修订版 + 通道数
-  const pcieRev = pickSpec(specMap, ['PCI Express 修订版']);
-  const pcieLanes = pickSpec(specMap, ['PCI Express 通道数的最大值']);
+  const pcieRev = pickSpec(specMap, ['PCI Express 修订版', 'PCI Express Revision']);
+  const pcieLanes = pickSpec(specMap, ['PCI Express 通道数的最大值', 'Max # of PCI Express Lanes']);
   if (pcieRev || pcieLanes) {
     const parts = [];
     if (pcieRev)   parts.push('PCIe ' + pcieRev);
@@ -247,7 +269,8 @@ window.parseIntel = function parseIntel() {
   }
 
   // scalability: 简化 "1S Only" → "1S"，其他保留
-  const scalRaw = pickSpec(specMap, ['可扩展性']);
+  const scalRaw = pickSpec(specMap, ['可扩展性', 'Scalability']);
+  result.scalability = scalRaw.replace(/\s*Only$/i, '').trim();
   result.scalability = scalRaw.replace(/\s*Only$/i, '').trim();
 
   return result;
