@@ -13,6 +13,9 @@ The format is based on Keep a Changelog.
 - Added an auth modal for API base URL, username, and password input.
 - Added ASUS motherboard tech spec page support with a dedicated parser.
 - Added Enter key submission support for the API authentication modal.
+- Added Intel CPU specification page support with a dedicated parser and manifest permissions.
+- Added CPU library lookup and create flow against `/api/hw/cpu`.
+- Added CPU review modal field mapping, including generated `cpu_s_name` and `cpu_short_name`.
 
 ### Changed
 - Changed auth handling to reuse cached access tokens in the extension background worker.
@@ -21,10 +24,11 @@ The format is based on Keep a Changelog.
 - Refactored `apiRequest` and `authorizedRequest` to handle 401 retries and cache clearing correctly.
 - Improved `apiRequest` robustness with JSON parsing protection and better error objects.
 - Enhanced `sendAuthorizedMessage` to correctly handle authentication cancellation.
+- Improved Intel CPU name extraction to strip cache/frequency suffixes and normalize short names like `Intel i9-14901E`.
+- Improved Intel CPU field extraction with fallback parsing for ECC, max memory, max turbo power, and mixed label variants.
 
 ### Removed
 - Removed deprecated and unused `content.js` file.
 
 ### Security
 - Stopped persisting passwords in extension storage.
-

@@ -18,12 +18,15 @@
         "https://www.supermicro.com/en/products/motherboard/*",
         "https://www.supermicro.org.cn/en/products/motherboard/*",
         "https://www.gigabyte.cn/Enterprise/Server-Motherboard/*",
-        "https://www.aorus.com/zh-tw/motherboards/*"
+        "https://www.aorus.com/zh-tw/motherboards/*",
+        "https://www.intel.cn/*",
+        "https://*.intel.cn/*"
       ],
       "js": [
         "ui.js"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "host_permissions": [
@@ -32,6 +35,18 @@
     "https://www.supermicro.com/*",
     "https://www.supermicro.org.cn/*",
     "https://www.gigabyte.cn/*",
-    "https://www.aorus.com/zh-tw/motherboards/*"
+    "https://www.aorus.com/zh-tw/motherboards/*",
+    "https://www.intel.cn/*",
+    "https://*.intel.cn/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "parsers/*.js"
+      ],
+      "matches": [
+        "https://www.intel.cn/*"
+      ]
+    }
   ]
 }

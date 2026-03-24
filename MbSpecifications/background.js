@@ -177,6 +177,44 @@ async function createMotherboard(payload) {
   });
 }
 
+async function checkCpu(payload) {
+  const config = normalizeConfig(payload?.apiConfig);
+  const cpuSName = normalizeModel(payload?.cpu_s_name);
+  if (!cpuSName) {
+    throw new Error("missing_cpu_name");
+  }
+  if (cpuSName.length < 4) {
+    throw new Error("cpu_name_too_short");
+  }
+
+  const results = await authorizedRequest(
+    config,
+    `/api/hw/cpu?keyword=${encodeURIComponent(cpuSName)}`
+  );
+
+  const existing = Array.isArray(results)
+    ? results.find(item =>
+        normalizeModel(item?.cpu_s_name) === cpuSName ||
+        normalizeModel(item?.cpu_name) === cpuSName
+      ) || null
+    : null;
+
+  return {
+    exists: Boolean(existing),
+    existing,
+    candidates: Array.isArray(results) ? results : []
+  };
+}
+
+async function createCpu(payload) {
+  const config = normalizeConfig(payload?.apiConfig);
+  return authorizedRequest(config, "/api/hw/cpu", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload.data)
+  });
+}
+
 async function clearAuthCache(configInput) {
   const config = normalizeConfig(configInput);
   const cacheKey = getConfigKey(config);
@@ -216,6 +254,13 @@ const PARSER_MAP = [
       path.endsWith("/Specification"),
     file: "parsers/aorus.js",
     exportName: "parseAorus"
+  },
+  {
+    match: (host, path) =>
+      host.includes("intel.cn") &&
+      path.includes("/products/sku/"),
+    file: "parsers/intel.js",
+    exportName: "parseIntel"
   }
 ];
 
@@ -233,7 +278,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
       try {
         await chrome.scripting.executeScript({
-          target: { tabId },
+          target: { tabId, allFrames: true },
           files:  [entry.file]
         });
         sendResponse({ ok: true, exportName: entry.exportName });
@@ -262,6 +307,32 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     (async () => {
       try {
         const data = await createMotherboard(msg.payload);
+        sendResponse({ ok: true, data });
+      } catch (e) {
+        sendResponse({ ok: false, reason: e.message || "create_failed" });
+      }
+    })();
+
+    return true;
+  }
+
+  if (msg.action === "checkCpu") {
+    (async () => {
+      try {
+        const data = await checkCpu(msg.payload);
+        sendResponse({ ok: true, ...data });
+      } catch (e) {
+        sendResponse({ ok: false, reason: e.message || "check_failed" });
+      }
+    })();
+
+    return true;
+  }
+
+  if (msg.action === "createCpu") {
+    (async () => {
+      try {
+        const data = await createCpu(msg.payload);
         sendResponse({ ok: true, data });
       } catch (e) {
         sendResponse({ ok: false, reason: e.message || "create_failed" });

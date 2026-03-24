@@ -17,6 +17,25 @@
     { apiKey: 'input', label: '存储接口', sourceKey: '存储接口', multiline: true },
     { apiKey: 'url', label: '页面URL', sourceKey: 'URL', multiline: true }
   ];
+  const CPU_FIELD_CONFIG = [
+    { apiKey: 'cpu_s_name', label: '标准化型号', sourceKey: '__cpu_s_name' },
+    { apiKey: 'cpu_short_name', label: 'CPU简称', sourceKey: '__cpu_short_name' },
+    { apiKey: 'cpu_name', label: 'CPU名称', sourceKey: 'cpu_name', multiline: true },
+    { apiKey: 'release_date', label: '发行日期', sourceKey: 'release_date' },
+    { apiKey: 'cores', label: '内核数', sourceKey: 'cores' },
+    { apiKey: 'max_turbo', label: '最大睿频频率', sourceKey: 'max_turbo' },
+    { apiKey: 'base_freq', label: '处理器基本频率', sourceKey: 'base_freq' },
+    { apiKey: 'cache', label: '缓存', sourceKey: 'cache' },
+    { apiKey: 'tdp', label: 'TDP', sourceKey: 'tdp' },
+    { apiKey: 'memory_channels', label: '内存通道数', sourceKey: 'memory_channels' },
+    { apiKey: 'memory_speed', label: '内存频率', sourceKey: 'memory_speed', multiline: true },
+    { apiKey: 'max_memory_speed', label: '最大内存频率', sourceKey: 'max_memory_speed' },
+    { apiKey: 'max_memory_capacity', label: '最大内存容量', sourceKey: 'max_memory_capacity' },
+    { apiKey: 'ecc_support', label: 'ECC支持', sourceKey: 'ecc_support' },
+    { apiKey: 'socket', label: '封装', sourceKey: 'socket' },
+    { apiKey: 'pci', label: 'PCI信息', sourceKey: 'pci' },
+    { apiKey: 'scalability', label: '可扩展性', sourceKey: 'scalability' }
+  ];
   const DEFAULT_API_BASE_URL = 'http://localhost:3000';
   const STORAGE_KEYS = {
     baseUrl: 'mbScraper.apiBaseUrl',
@@ -413,17 +432,80 @@
     checkBtn.disabled = isBusy;
   }
 
-  function toApiPayload(result) {
+  function normalizeKeyword(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  }
+
+  function buildCpuShortName(cpuName) {
+    const cleaned = String(cpuName || '').replace(/[®™]/g, '').replace(/\s+/g, ' ').trim();
+    if (!cleaned) return '';
+    const intelCodeMatch = cleaned.match(/(?:酷睿\s*)?(i[3579])\s*(?:处理器\s*)?([a-z0-9]+)$/i);
+    if (intelCodeMatch) {
+      return `Intel ${intelCodeMatch[1].toLowerCase()}-${intelCodeMatch[2].toUpperCase()}`;
+    }
+    const intelCoreUltraMatch = cleaned.match(/core\s+ultra\s+(\d+)\s+processor\s+([a-z0-9]+)$/i);
+    if (intelCoreUltraMatch) {
+      return `Intel Ultra ${intelCoreUltraMatch[1]} ${intelCoreUltraMatch[2].toUpperCase()}`;
+    }
+    const match = cleaned.match(/^(Intel|AMD)\s+(.+)$/i);
+    if (!match) return cleaned;
+    const vendor = match[1].toUpperCase() === 'AMD' ? 'AMD' : 'Intel';
+    let tail = match[2]
+      .replace(/\bprocessor\b/ig, '')
+      .replace(/\bCPU\b/ig, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!tail) return vendor;
+    return `${vendor} ${tail}`;
+  }
+
+  function getEntityConfig(result) {
+    if (result?.cpu_name) {
+      return {
+        type: 'cpu',
+        label: 'CPU',
+        keyField: 'cpu_name',
+        keyFieldLabel: 'CPU名称',
+        checkAction: 'checkCpu',
+        createAction: 'createCpu',
+        createSuccessText: '✓ 已写入 CPU 库',
+        existsText: existing => `✓ 已存在：${existing?.cpu_name || result.cpu_name}`,
+        modalTitle: 'CPU 映射审核',
+        modalDesc: '库中未找到当前 CPU。请确认抓取字段与入库字段的映射，必要时可以直接修改后再提交。',
+        fieldConfig: CPU_FIELD_CONFIG
+      };
+    }
+
+    return {
+      type: 'motherboard',
+      label: '主板',
+      keyField: 'model',
+      keyFieldLabel: '主板型号',
+      checkAction: 'checkMotherboard',
+      createAction: 'createMotherboard',
+      createSuccessText: '✓ 已写入主板库',
+      existsText: existing => `✓ 已存在：${existing?.model || result.Model}`,
+      modalTitle: '主板映射审核',
+      modalDesc: '库中未找到当前主板。请确认抓取字段与入库字段的映射，必要时可以直接修改后再提交。',
+      fieldConfig: FIELD_CONFIG
+    };
+  }
+
+  function toApiPayload(result, entityConfig) {
     const payload = {};
-    FIELD_CONFIG.forEach(field => {
+    entityConfig.fieldConfig.forEach(field => {
       payload[field.apiKey] = result[field.sourceKey] || '';
     });
     return payload;
   }
 
-  function openModal(payload, result) {
-    modalState = { payload, result };
-    modalBody.innerHTML = FIELD_CONFIG.map(field => {
+  function openModal(payload, result, entityConfig) {
+    modalState = { payload, result, entityConfig };
+    document.getElementById('__scraper_modal_title__').textContent = entityConfig.modalTitle;
+    document.querySelector('#__scraper_modal__ .modal-desc').textContent = entityConfig.modalDesc;
+    modalBody.innerHTML = entityConfig.fieldConfig.map(field => {
       const sourceValue = result[field.sourceKey] || '';
       const inputValue = payload[field.apiKey] || '';
       const control = field.multiline
@@ -541,8 +623,8 @@
   }
 
   async function getResult() {
-    // 如果已有缓存且页面 URL 未变则直接复用
-    if (cachedResult && cachedResult.__url === location.href) {
+    // 如果已有有效缓存且页面 URL 未变则直接复用
+    if (cachedResult && cachedResult.__url === location.href && (cachedResult.cpu_name || cachedResult.Model)) {
       return cachedResult;
     }
 
@@ -581,11 +663,19 @@
       return null;
     }
 
-    result.__url = location.href; // 用于缓存判断
-    cachedResult = result;
+    if (result.cpu_name) {
+      result.__cpu_s_name = normalizeKeyword(result.cpu_name);
+      result.__cpu_short_name = buildCpuShortName(result.cpu_name);
+    }
 
-    // 显示型号名
-    modelEl.textContent = result.Model || '（未识别型号）';
+    // 只有在抓取到有效信息（如 cpu_name 或 Model）时才缓存
+    if (result.cpu_name || result.Model) {
+      result.__url = location.href;
+      cachedResult = result;
+    }
+
+    // 显示型号名 (针对 CPU parser 使用 cpu_name, 母板 parser 使用 Model)
+    modelEl.textContent = result.cpu_name || result.Model || '（未识别型号）';
     setBusy(false);
     setStatus('');
 
@@ -632,17 +722,19 @@
     const result = await getResult();
     if (!result) return;
 
-    const payload = toApiPayload(result);
+    const entityConfig = getEntityConfig(result);
+    const payload = toApiPayload(result, entityConfig);
     setStatus('查询库中…');
     setBusy(true);
 
     try {
       const resp = await sendAuthorizedMessage(
-        'checkMotherboard',
+        entityConfig.checkAction,
         currentApiConfig => ({
           apiConfig: currentApiConfig,
           model: payload.model,
-          url: payload.url
+          url: payload.url,
+          cpu_s_name: payload.cpu_s_name
         })
       );
 
@@ -652,12 +744,11 @@
       }
 
       if (resp.exists) {
-        const existingModel = resp.existing?.model || payload.model;
-        setStatus(`✓ 已存在：${existingModel}`, 'ok');
+        setStatus(entityConfig.existsText(resp.existing), 'ok');
         return;
       }
 
-      openModal(payload, result);
+      openModal(payload, result, entityConfig);
       setStatus('未找到，等待确认', 'err');
     } catch (error) {
       setStatus('✗ ' + humanizeError(error?.message), 'err');
@@ -679,8 +770,9 @@
     if (!modalState) return;
 
     const payload = collectModalPayload();
-    if (!payload.model) {
-      showModalError('主板型号不能为空');
+    const { entityConfig } = modalState;
+    if (!payload[entityConfig.keyField]) {
+      showModalError(entityConfig.keyFieldLabel + '不能为空');
       return;
     }
 
@@ -690,7 +782,7 @@
 
     try {
       const resp = await sendAuthorizedMessage(
-        'createMotherboard',
+        entityConfig.createAction,
         currentApiConfig => ({
           apiConfig: currentApiConfig,
           data: payload
@@ -703,7 +795,7 @@
       }
 
       closeModal();
-      setStatus('✓ 已写入主板库', 'ok');
+      setStatus(entityConfig.createSuccessText, 'ok');
     } catch (error) {
       showModalError('写库失败：' + humanizeError(error?.message));
     } finally {
@@ -732,7 +824,7 @@
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = (result.Model || 'export') + '.csv';
+    link.download = (result.Model || result.cpu_name || 'export') + '.csv';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -758,6 +850,8 @@
     if (reason === 'missing_password') return '缺少密码';
     if (reason === 'missing_model') return '缺少主板型号';
     if (reason === 'model_too_short') return '主板型号长度不足，无法查询';
+    if (reason === 'missing_cpu_name') return '缺少 CPU 名称';
+    if (reason === 'cpu_name_too_short') return 'CPU 型号长度不足，无法查询';
     return reason || '未知错误';
   }
 
