@@ -4,10 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## [Unreleased]
+## [3.0] - 2026-03-25
 
 ### Added
-- Added support for scraping Aorus motherboard specifications (`parsers/aorus.js`).
+- **Batch List Page Scraping**: Added full support for scraping multiple products from a list page.
+  - Automatically detects product lists on supported sites (Asus, Gigabyte, Aorus, Supermicro, Intel).
+  - New "Batch Mode" UI to select, scrape, and export multiple products at once.
+  - Uses a background tab queue to reliably scrape CSR (Client-Side Rendered) pages without opening multiple visible tabs.
+  - Adds random delays between requests to mimic human behavior.
+- **Link Discovery**: Added `findLinks` capability to all parsers for intelligent product discovery on list pages.
+
+### Changed
+- **Parser Architecture**: Refactored all parsers (`asus.js`, `gigabyte.js`, `aorus.js`, `intel.js`, `supermicro.js`) to be environment-agnostic, accepting a custom `document` object.
+- **Background Logic**: Updated `background.js` to manage a persistent background tab for batch jobs instead of stateless fetch requests.
+- **Injection Rules**: Relaxed `PARSER_MAP` matching rules to allow scraper execution on list/category pages.
+
+### Fixed
+- **Intel Detection**: Fixed a bug where Intel product detail pages were incorrectly identified as list pages due to related product links.
+
+## [2.0] - Unreleased
 - Added motherboard library lookup and create flow against the local hardware API.
 - Added a review modal so scraped motherboard fields can be checked and edited before writing to the database.
 - Added an auth modal for API base URL, username, and password input.

@@ -233,43 +233,219 @@ const PARSER_MAP = [
   {
     match: (host, path) =>
       host.includes("asus.com") &&
-      path.includes("/motherboards-components/motherboards/") &&
-      /\/techspec\/?$/.test(path),
+      path.includes("/motherboards-components/motherboards/"),
     file: "parsers/asus.js",
     exportName: "parseAsus"
   },
   {
     match: (host, path) =>
       host.includes("supermicro") &&
-      path.startsWith("/en/products/motherboard/"),
+      path.startsWith("/en/products/motherboard"),
     file: "parsers/supermicro.js",
     exportName: "parseSupermicro"
   },
   {
     match: (host, path) =>
       host.includes("gigabyte.cn") &&
-      path.startsWith("/Enterprise/Server-Motherboard/"),
+      path.startsWith("/Enterprise/Server-Motherboard"),
     file: "parsers/gigabyte.js",
     exportName: "parseGigabyte"
   },
   {
     match: (host, path) =>
       host.includes("aorus.com") &&
-      path.includes("/motherboards/") &&
-      path.endsWith("/Specification"),
+      path.includes("/motherboards/"),
     file: "parsers/aorus.js",
     exportName: "parseAorus"
   },
   {
     match: (host, path) =>
       /intel\.(cn|com)$/.test(host) &&
-      (path.includes("/products/sku/") || path.includes("/ark/products/")),
+      (path.includes("/products/") || path.includes("/ark/") || path.includes("/content/www/")),
     file: "parsers/intel.js",
     exportName: "parseIntel"
   }
 ];
 
+// ─── 批量抓取控制器 ──────────────────────────────────────────────────────────
+class BatchScraper {
+  constructor() {
+    this.queue = [];
+    this.results = [];
+    this.workerTabId = null;
+    this.isScraping = false;
+    this.sourceTabId = null; // 发起抓取的列表页 Tab ID
+    this.currentIndex = 0;
+    this.mappingConfig = null;
+    this.apiConfig = null;
+    
+    // 绑定事件处理器
+    this.handleMessage = this.handleMessage.bind(this);
+    this.handleTabUpdate = this.handleTabUpdate.bind(this);
+    this.handleTabRemove = this.handleTabRemove.bind(this);
+    
+    chrome.tabs.onUpdated.addListener(this.handleTabUpdate);
+    chrome.tabs.onRemoved.addListener(this.handleTabRemove);
+  }
+
+  async start(links, sourceTabId) {
+    if (this.isScraping) return { ok: false, reason: 'Already scraping' };
+    
+    this.queue = links;
+    this.results = new Array(links.length).fill(null);
+    this.sourceTabId = sourceTabId;
+    this.currentIndex = 0;
+    this.isScraping = true;
+
+    // 创建一个后台标签页用于抓取
+    const tab = await chrome.tabs.create({ active: false, url: 'about:blank' });
+    this.workerTabId = tab.id;
+
+    this.processNext();
+    return { ok: true };
+  }
+
+  stop() {
+    this.isScraping = false;
+    if (this.workerTabId) {
+      chrome.tabs.remove(this.workerTabId).catch(() => {});
+      this.workerTabId = null;
+    }
+    this.queue = [];
+    this.sourceTabId = null;
+  }
+
+  async processNext() {
+    if (!this.isScraping) return;
+
+    if (this.currentIndex >= this.queue.length) {
+      this.finish();
+      return;
+    }
+
+    const item = this.queue[this.currentIndex];
+    
+    // 通知 UI 更新状态: Fetching
+    this.notifyProgress(this.currentIndex, 'Fetching...', 'active');
+
+    if (this.workerTabId) {
+      await chrome.tabs.update(this.workerTabId, { url: item.url });
+    }
+  }
+
+  async handleTabUpdate(tabId, changeInfo, tab) {
+    if (tabId !== this.workerTabId || changeInfo.status !== 'complete') return;
+    
+    // 页面加载完成，注入解析器
+    // 稍微延迟一下，等待 JS 渲染 (对于重 CSR 页面可能需要更智能的等待，这里暂定 2秒)
+    // 为了更稳健，可以轮询某个特征元素，但通用方案只能 sleep
+    await new Promise(r => setTimeout(r, 2000));
+
+    try {
+      // 1. 注入解析器代码
+      const url = new URL(tab.url);
+      const entry = PARSER_MAP.find(p => p.match(url.hostname, url.pathname));
+      
+      if (!entry) throw new Error("No parser match");
+
+      await chrome.scripting.executeScript({
+        target: { tabId: this.workerTabId },
+        files: [entry.file]
+      });
+
+      // 2. 执行解析
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: this.workerTabId },
+        func: (exportName) => {
+          // 在页面上下文中执行
+          const fn = window[exportName];
+          return fn ? fn() : null;
+        },
+        args: [entry.exportName]
+      });
+
+      const data = results[0]?.result;
+      if (!data) throw new Error("Parse returned null");
+
+      this.results[this.currentIndex] = data;
+      this.notifyProgress(this.currentIndex, 'Done', 'success', data);
+
+    } catch (e) {
+      console.error('Batch error:', e);
+      this.notifyProgress(this.currentIndex, 'Error', 'error', null, e.message);
+    }
+
+    // 无论成功失败，继续下一个
+    this.currentIndex++;
+    // 随机延迟防封 (1s)
+    setTimeout(() => this.processNext(), 1000);
+  }
+
+  handleTabRemove(tabId) {
+    if (tabId === this.workerTabId && this.isScraping) {
+      // 用户意外关闭了抓取窗口，停止任务
+      this.stop();
+      // 通知 UI 任务被中断
+      if (this.sourceTabId) {
+        chrome.tabs.sendMessage(this.sourceTabId, {
+          action: 'batchAborted',
+          reason: 'Worker tab closed'
+        }).catch(() => {});
+      }
+    }
+  }
+
+  finish() {
+    this.isScraping = false;
+    if (this.workerTabId) {
+      chrome.tabs.remove(this.workerTabId).catch(() => {});
+      this.workerTabId = null;
+    }
+    
+    if (this.sourceTabId) {
+      chrome.tabs.sendMessage(this.sourceTabId, {
+        action: 'batchComplete',
+        results: this.results
+      }).catch(() => {});
+    }
+  }
+
+  notifyProgress(index, statusText, statusType, data = null, error = null) {
+    if (this.sourceTabId) {
+      chrome.tabs.sendMessage(this.sourceTabId, {
+        action: 'batchProgress',
+        index,
+        total: this.queue.length,
+        statusText,
+        statusType,
+        data,
+        error
+      }).catch(() => {});
+    }
+  }
+
+  handleMessage(msg, sender, sendResponse) {
+    if (msg.action === "startBatchScrape") {
+      this.start(msg.links, sender.tab.id, msg.apiConfig, msg.mappingConfig).then(res => sendResponse(res));
+      return true;
+    }
+    if (msg.action === "stopBatchScrape") {
+      this.stop();
+      sendResponse({ ok: true });
+      return true;
+    }
+  }
+}
+
+const batchScraper = new BatchScraper();
+
+// ─── 消息监听聚合 ──────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // 优先处理批量任务消息
+  if (msg.action === "startBatchScrape" || msg.action === "stopBatchScrape") {
+    return batchScraper.handleMessage(msg, sender, sendResponse);
+  }
+
   if (msg.action === "injectParser") {
     (async () => {
       const tabId = sender.tab.id;

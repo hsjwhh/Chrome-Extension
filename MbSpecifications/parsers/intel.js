@@ -1,4 +1,4 @@
-window.parseIntel = function parseIntel() {
+window.parseIntel = function parseIntel(doc = document) {
 
   // ─── 工具函数 ────────────────────────────────────────────────────────────
   function clean(value) {
@@ -24,12 +24,11 @@ window.parseIntel = function parseIntel() {
       if (cleaned) candidates.push(cleaned);
     }
 
-    push(document.querySelector('h1')?.innerText);
-    push(document.querySelector('.product-family-title-text')?.innerText);
-    push(document.querySelector('.ark-product-name')?.innerText);
+    push(doc.querySelector('h1')?.innerText);
+    push(doc.querySelector('.product-family-title-text')?.innerText);
+    push(doc.querySelector('.ark-product-name')?.innerText);
 
-    document
-      .querySelectorAll('script[type="application/ld+json"]')
+    doc.querySelectorAll('script[type="application/ld+json"]')
       .forEach(script => {
         try {
           const parsed = JSON.parse(script.textContent || 'null');
@@ -43,12 +42,12 @@ window.parseIntel = function parseIntel() {
         } catch (_) {}
       });
 
-    push(document.querySelector('meta[property="og:title"]')?.content);
-    push(document.querySelector('meta[name="title"]')?.content);
-    push(document.title);
+    push(doc.querySelector('meta[property="og:title"]')?.content);
+    push(doc.querySelector('meta[name="title"]')?.content);
+    push(doc.title);
 
     const breadcrumbText = Array.from(
-      document.querySelectorAll('nav, [aria-label*="breadcrumb" i], .breadcrumb')
+      doc.querySelectorAll('nav, [aria-label*="breadcrumb" i], .breadcrumb')
     )
       .map(node => node.innerText)
       .find(text => text && /intel/i.test(text) && /processor/i.test(text));
@@ -81,7 +80,7 @@ window.parseIntel = function parseIntel() {
   }
 
   function extractValueFromPageText(labels) {
-    const text = document.body.innerText;
+    const text = doc.body.innerText;
     for (const label of labels) {
       const regex = new RegExp(escapeRegExp(label) + '\\s*\\n+\\s*([^\\n]{1,100})', 'i');
       const match = text.match(regex);
@@ -93,14 +92,15 @@ window.parseIntel = function parseIntel() {
   // 构建 label → value 映射
   function buildSpecMap() {
     const map = {};
-    const text = document.body.innerText;
+    const text = doc.body.innerText;
 
     // 1. 获取所有可能是 label 和 value 的元素
-    const allLabels = document.querySelectorAll('.spec-label, .label, [class*="label"]');
-    const allValues = document.querySelectorAll('.spec-data, .value, [class*="value"]');
+    // 注意：doc.querySelectorAll 返回的是 NodeList，不是 Array
+    const allLabels = doc.querySelectorAll('.spec-label, .label, [class*="label"]');
+    const allValues = doc.querySelectorAll('.spec-data, .value, [class*="value"]');
 
     // 2. 尝试从共同父元素 (如 li 或 div) 提取
-    document.querySelectorAll('li, tr, .row, [class*="item"]').forEach(container => {
+    doc.querySelectorAll('li, tr, .row, [class*="item"]').forEach(container => {
       const label = container.querySelector('.spec-label, .label, [class*="label"]')?.innerText;
       const value = container.querySelector('.spec-data, .value, [class*="value"]')?.innerText;
       if (label && value) {
@@ -113,7 +113,7 @@ window.parseIntel = function parseIntel() {
 
     // 3. 如果还是空，尝试全局扫描所有 spec-label 并找其后续元素 (针对某些 grid 布局)
     if (Object.keys(map).length === 0) {
-      document.querySelectorAll('.spec-label').forEach(labelEl => {
+      doc.querySelectorAll('.spec-label').forEach(labelEl => {
         const label = clean(labelEl.innerText);
         if (!label) return;
         let next = labelEl.nextElementSibling;
@@ -164,7 +164,7 @@ window.parseIntel = function parseIntel() {
   }
 
   const result = {
-    URL:                location.href,
+    URL:                (doc.location || location).href,
     cpu_name:           '',
     cpu_short_name:     '',
     cpu_s_name:         '',
@@ -305,7 +305,7 @@ window.parseIntel = function parseIntel() {
 
   // ─── 新增字段：SKU ────────────────────────────────────────────────────────
   // 优先从 URL 提取，因为 URL 中的 SKU 是最可靠的身份标识
-  const urlSkuMatch = location.href.match(/[/-]sku[/-](\d+)(?:[/-]|$)/i);
+  const urlSkuMatch = (doc.location || location).href.match(/[/-]sku[/-](\d+)(?:[/-]|$)/i);
   if (urlSkuMatch) {
     result.sku = urlSkuMatch[1];
   } else {
@@ -314,3 +314,43 @@ window.parseIntel = function parseIntel() {
 
   return result;
 };
+
+window.findIntelLinks = function findIntelLinks(doc = document) {
+  const links = [];
+  const seen = new Set();
+  const loc = doc.location || location;
+  
+  // 关键修正：如果当前页面明确是详情页，则不进行列表抓取
+  // Intel 详情页通常包含 /sku/ 且以 specifications.html 结尾，或者只是 /sku/xxxx/name
+  // 列表页通常是 /ark/products/series/xxx 或 /content/www/cn/zh/products/details/processors/xxx
+  if (loc.href.includes('/sku/') && loc.href.includes('/specifications')) {
+      return [];
+  }
+  
+  // 进一步防御：如果已经提取到了 cpu_name (说明 parse 成功)，通常也不应该是列表页
+  // 但这里我们在 findLinks 阶段可能还没 parse。
+  
+  // Intel ARK 搜索结果页或列表页
+  // 链接通常包含 /products/sku/
+  // 排除面包屑和导航栏
+  const mainContent = doc.querySelector('#main-content') || doc.body;
+  
+  mainContent.querySelectorAll('a').forEach(a => {
+    // 排除面包屑、导航等区域的干扰 (简单通过父级 class 判断)
+    if (a.closest('nav') || a.closest('.breadcrumb')) return;
+
+    const href = a.href;
+    // 排除当前页面链接
+    if (href === loc.href) return;
+
+    if (href && href.includes('/products/sku/') && !seen.has(href)) {
+        let name = a.innerText.trim();
+        if (name && name.length > 3) {
+            links.push({ url: href, name: name });
+            seen.add(href);
+        }
+    }
+  });
+  
+  return links;
+};;

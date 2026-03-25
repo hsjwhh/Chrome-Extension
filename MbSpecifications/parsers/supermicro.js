@@ -1,7 +1,7 @@
-window.parseSupermicro = function parseSupermicro() {
+window.parseSupermicro = function parseSupermicro(doc = document) {
   const SOCKET_PATTERN = /\b(?:AM\d+|LGA[- ]?\d+|SP\d+|sTR\d+|TR\d+|sTRX\d+|sWRX\d+)\b/i;
   const result = {
-    URL: location.href,
+    URL: (doc.location || location).href,
     Model: '',
     CPU类型: '',
     CPU接口: '',
@@ -16,11 +16,11 @@ window.parseSupermicro = function parseSupermicro() {
     存储接口: ''
   };
 
-  const title = document.title;
+  const title = doc.title || '';
   result.Model = title.split('|')[0].trim();
 
   // ─── 第一优先级：从 Key Features (概览页) 提取数据 ────────────────────────
-  const kfList = document.querySelectorAll('.key-feature-list li');
+  const kfList = doc.querySelectorAll('.key-feature-list li');
   if (kfList.length > 0) {
     kfList.forEach(li => {
       const text = li.innerText.trim();
@@ -66,7 +66,7 @@ window.parseSupermicro = function parseSupermicro() {
   }
 
   // ─── 第二优先级：从详细规格表 (Specifications) 补全缺失数据 ───────────────
-  const tables = document.querySelectorAll('.sys-spec-table.active-tab table.spec-table-1, .tab-specs-more.active table.spec-table-1, table.spec-table-1');
+  const tables = doc.querySelectorAll('.sys-spec-table.active-tab table.spec-table-1, .tab-specs-more.active table.spec-table-1, table.spec-table-1');
 
   tables.forEach(table => {
     const rows = table.querySelectorAll('tr');
@@ -149,4 +149,35 @@ window.parseSupermicro = function parseSupermicro() {
   });
 
   return result;
-}
+};
+
+window.findSupermicroLinks = function findSupermicroLinks(doc = document) {
+  const links = [];
+  const seen = new Set();
+  
+  // Supermicro 列表页通常是 /en/products/motherboard
+  // 链接通常在表格中，或者卡片中
+  doc.querySelectorAll('a').forEach(a => {
+    const href = a.href;
+    if (href && href.includes('/en/products/motherboard/') && !seen.has(href)) {
+        if (href.includes('?')) return;
+        
+        // 排除非产品页 (如索引页，PDF 等)
+        if (href.endsWith('.pdf')) return;
+
+        let name = a.innerText.trim();
+        // 尝试从行内其他元素获取型号（Supermicro 列表通常是表格，第一列是型号）
+        if (!name && a.closest('tr')) {
+            const modelCell = a.closest('tr').querySelector('td a');
+            if (modelCell) name = modelCell.innerText.trim();
+        }
+
+        if (name && name.length > 3 && !/view all/i.test(name)) {
+            links.push({ url: href, name: name });
+            seen.add(href);
+        }
+    }
+  });
+  
+  return links;
+};

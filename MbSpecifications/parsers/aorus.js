@@ -1,6 +1,6 @@
-window.parseAorus = function parseAorus() {
+window.parseAorus = function parseAorus(doc = document) {
   const result = {
-    URL: location.href,
+    URL: (doc.location || location).href,
     Model: '',
     CPU类型: '',
     CPU接口: '',
@@ -16,7 +16,8 @@ window.parseAorus = function parseAorus() {
   };
 
   // 1. 获取型号 (根据网址提取，例如 ../motherboards/TRX50-AERO-D-rev-12/Specification)
-  const segments = location.pathname.replace(/\/$/, "").split("/");
+  const loc = doc.location || location;
+  const segments = loc.pathname.replace(/\/$/, "").split("/");
   if (segments[segments.length - 1] === "Specification") {
     result.Model = segments[segments.length - 2] || "";
   } else {
@@ -26,10 +27,10 @@ window.parseAorus = function parseAorus() {
 
   // 2. 辅助函数：通过左侧标签获取右侧内容
   function getValueByLabel(labelKeyword) {
-    const labels = Array.from(document.querySelectorAll('.tableDataBox1 .tableDataBox'));
+    const labels = Array.from(doc.querySelectorAll('.tableDataBox1 .tableDataBox'));
     const targetLabel = labels.find(el => el.innerText.trim().includes(labelKeyword));
     if (targetLabel && targetLabel.id) {
-        const valueEl = document.querySelector(`.tableDataBox2 #${targetLabel.id}`);
+        const valueEl = doc.querySelector(`.tableDataBox2 #${targetLabel.id}`);
         return valueEl ? valueEl.innerText.trim() : '';
     }
     return '';
@@ -86,3 +87,30 @@ window.parseAorus = function parseAorus() {
 
   return result;
 };
+
+window.findAorusLinks = function findAorusLinks(doc = document) {
+  const links = [];
+  const seen = new Set();
+  
+  // Aorus 列表： https://www.aorus.com/zh-tw/motherboards/ ...
+  doc.querySelectorAll('a').forEach(a => {
+    const href = a.href;
+    if (href && href.includes('/motherboards/') && !seen.has(href)) {
+        // 排除列表筛选器
+        if (href.includes('?') || href.includes('#')) return;
+        
+        let name = a.innerText.trim();
+        // Aorus 卡片通常有 h5.card-title
+        if (!name && a.querySelector('.card-title')) {
+            name = a.querySelector('.card-title').innerText.trim();
+        }
+        
+        if (name && name.length > 2 && !/More/i.test(name)) {
+            links.push({ url: href, name: name });
+            seen.add(href);
+        }
+    }
+  });
+  
+  return links;
+};;

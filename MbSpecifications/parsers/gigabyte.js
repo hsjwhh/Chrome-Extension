@@ -1,4 +1,4 @@
-window.parseGigabyte = function parseGigabyte() {
+window.parseGigabyte = function parseGigabyte(doc = document) {
 
   // ─── 文本清理：多行 → 单行 ───────────────────────────────────────────────
   // 1. 按换行拆分
@@ -16,13 +16,15 @@ window.parseGigabyte = function parseGigabyte() {
 
   // ─── 从 URL 取型号 ────────────────────────────────────────────────────────
   function getModelFromURL() {
-    const path = location.pathname.replace(/\/$/, "");
+    // 优先使用 doc.location (如果是真实 document)，否则使用传入的 mock location 或者空
+    const loc = doc.location || location;
+    const path = loc.pathname.replace(/\/$/, "");
     const segments = path.split("/");
     return segments[segments.length - 1] || "";
   }
 
   const result = {
-    URL:       location.href,
+    URL:       (doc.location || location).href,
     Model:     getModelFromURL(),
     CPU类型:   '',
     CPU接口:   '',
@@ -39,7 +41,7 @@ window.parseGigabyte = function parseGigabyte() {
 
   // ─── 读取页面规格表 ───────────────────────────────────────────────────────
   const specMap = {};
-  document.querySelectorAll("#Section-Specifications .SpecItem").forEach(item => {
+  doc.querySelectorAll("#Section-Specifications .SpecItem").forEach(item => {
     const title = item.querySelector(".Title")?.innerText?.trim();
     const desc  = item.querySelector(".Desc")?.innerText?.trim();
     if (title && desc) specMap[title] = desc;
@@ -105,4 +107,37 @@ window.parseGigabyte = function parseGigabyte() {
   result.M2 = m2Lines.join(' ; ');
 
   return result;
-}
+};
+
+window.findGigabyteLinks = function findGigabyteLinks(doc = document) {
+  const links = [];
+  // 针对列表页：提取所有产品详情链接
+  // 选择器需要根据实际列表页结构调整，这里假设常见的 .ProductList .ProductItem a
+  // 也可以从所有 a 标签中筛选符合 /Enterprise/Server-Motherboard/xxx 的链接
+  const seen = new Set();
+  
+  doc.querySelectorAll('a').forEach(a => {
+    const href = a.href;
+    // 过滤条件：包含 Server-Motherboard 且不包含 #, javascript 等，且要是详情页（通常没有 query 参数或者特定结构）
+    // 详情页示例: https://www.gigabyte.cn/Enterprise/Server-Motherboard/MS03-CE0-rev-10
+    if (href && href.includes('/Enterprise/Server-Motherboard/') && !seen.has(href)) {
+        // 简单排除列表页自身的过滤参数
+        if (href.includes('?')) return;
+        
+        // 提取型号名作为 label
+        let name = a.innerText.trim();
+        if (!name) {
+            const img = a.querySelector('img');
+            if (img) name = img.alt || img.title;
+        }
+        
+        // 只有当名字存在且看起来像型号时才添加
+        if (name && name.length > 3) {
+            links.push({ url: href, name: name });
+            seen.add(href);
+        }
+    }
+  });
+  
+  return links;
+};

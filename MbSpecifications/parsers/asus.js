@@ -1,7 +1,7 @@
-window.parseAsus = function parseAsus() {
+window.parseAsus = function parseAsus(doc = document) {
   const SOCKET_PATTERN = /\b(?:AM\d+|LGA[- ]?\d+|SP\d+|sTR\d+|TR\d+|sTRX\d+|sWRX\d+)\b/i;
   const result = {
-    URL: location.href,
+    URL: (doc.location || location).href,
     Model: "",
     CPU类型: "",
     CPU接口: "",
@@ -98,10 +98,10 @@ window.parseAsus = function parseAsus() {
     return specMap;
   }
 
-  const lines = splitLines(document.body.innerText);
+  const lines = splitLines(doc.body.innerText);
   const titleHeading =
-    cleanText(document.querySelector("h1")?.textContent) ||
-    cleanText(document.title.split("|")[0]);
+    cleanText(doc.querySelector("h1")?.textContent) ||
+    cleanText(doc.title.split("|")[0]);
   if (titleHeading) result.Model = titleHeading;
 
   const specMap = buildSpecMap(lines);
@@ -162,3 +162,37 @@ window.parseAsus = function parseAsus() {
 
   return result;
 };
+
+window.findAsusLinks = function findAsusLinks(doc = document) {
+  const links = [];
+  const seen = new Set();
+
+  // Asus 列表页： /motherboards-components/motherboards/All-series/
+  // 卡片中的链接通常指向 /motherboards-components/motherboards/MODEL_NAME/
+  doc.querySelectorAll('a').forEach(a => {
+    const href = a.href;
+    if (href && href.includes('/motherboards-components/motherboards/') && !seen.has(href)) {
+       // 排除列表页自己
+       if (href.endsWith('/All-series/') || href.includes('/filter/')) return;
+       
+       let name = a.innerText.trim();
+       // 尝试从 img alt 获取
+       if (!name) {
+           const img = a.querySelector('img');
+           if (img) name = img.alt;
+       }
+       
+       // Asus 产品卡片通常有个 heading
+       if (!name && a.querySelector('div[class*="productName"]')) {
+           name = a.querySelector('div[class*="productName"]').innerText.trim();
+       }
+
+       if (name && name.length > 2) {
+           links.push({ url: href, name: name });
+           seen.add(href);
+       }
+    }
+  });
+
+  return links;
+};;
