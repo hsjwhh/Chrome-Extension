@@ -113,4 +113,4 @@ window.findAorusLinks = function findAorusLinks(doc = document) {
   });
   
   return links;
-};;
+};

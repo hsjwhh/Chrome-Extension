@@ -335,11 +335,43 @@ class BatchScraper {
 
   async handleTabUpdate(tabId, changeInfo, tab) {
     if (tabId !== this.workerTabId || changeInfo.status !== 'complete') return;
-    
-    // 页面加载完成，注入解析器
-    // 稍微延迟一下，等待 JS 渲染 (对于重 CSR 页面可能需要更智能的等待，这里暂定 2秒)
-    // 为了更稳健，可以轮询某个特征元素，但通用方案只能 sleep
-    await new Promise(r => setTimeout(r, 2000));
+
+    // 轮询等待各厂商规格表渲染完毕，每 300ms 检查一次，最多等 8 秒
+    const READY_SELECTORS = {
+      'supermicro': '.spec-table-1, .key-feature-list',
+      'gigabyte':   '#Section-Specifications .SpecItem',
+      'aorus':      '.tableDataBox',
+      'asus':       '.spec-section, .techspec-table',
+      'intel':      '.spec-label, .specs-section',
+    };
+    const POLL_INTERVAL = 300;
+    const POLL_TIMEOUT  = 8000;
+
+    await (async () => {
+      let selector = null;
+      try {
+        const url = new URL(tab.url);
+        for (const [key, sel] of Object.entries(READY_SELECTORS)) {
+          if (url.hostname.includes(key)) { selector = sel; break; }
+        }
+      } catch (_) {}
+
+      if (!selector) {
+        await new Promise(r => setTimeout(r, 1500));
+        return;
+      }
+
+      const deadline = Date.now() + POLL_TIMEOUT;
+      while (Date.now() < deadline) {
+        const found = await chrome.scripting.executeScript({
+          target: { tabId: this.workerTabId },
+          func: (sel) => !!document.querySelector(sel),
+          args: [selector]
+        }).then(r => r[0]?.result).catch(() => false);
+        if (found) return;
+        await new Promise(r => setTimeout(r, POLL_INTERVAL));
+      }
+    })();
 
     try {
       // 1. 注入解析器代码

@@ -195,4 +195,4 @@ window.findAsusLinks = function findAsusLinks(doc = document) {
   });
 
   return links;
-};;
+};
