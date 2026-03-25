@@ -105,6 +105,8 @@
     #__scraper_bar__ .btn-copy { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
     #__scraper_bar__ .btn-check { background: #0f766e; color: #ecfeff; border: 1px solid #115e59; }
     #__scraper_bar__ .btn-batch { background: #7c3aed; color: #fff; border: 1px solid #6d28d9; }
+    #__scraper_bar__ .btn-toggle { background: #1e293b; color: #64748b; border: 1px solid #334155; font-size: 11px; padding: 4px 10px; }
+    #__scraper_bar__ .btn-toggle:hover { color: #c9d1e0; }
     
     #__scraper_bar__ .scraper-status {
       font-size: 12px;
@@ -193,6 +195,7 @@
     </div>
 
     <span class="scraper-status" id="__scraper_status__"></span>
+    <button class="scraper-btn btn-toggle" id="__scraper_toggle__" title="切换单品/批量模式">⇌</button>
   `;
   document.body.insertBefore(bar, document.body.firstChild);
 
@@ -208,7 +211,8 @@
     btnCsv: document.getElementById('__scraper_csv__'),
     btnCopy: document.getElementById('__scraper_copy__'),
     btnCheck: document.getElementById('__scraper_check__'),
-    btnBatchOpen: document.getElementById('__scraper_batch_open__')
+    btnBatchOpen: document.getElementById('__scraper_batch_open__'),
+    btnToggle: document.getElementById('__scraper_toggle__')
   };
 
   let runtime = {
@@ -256,10 +260,31 @@
     setupSingleMode();
   })();
 
+  // ─── 手动切换模式 ───────────────────────────────────────────────────────────
+  function switchMode(toMode) {
+    if (toMode === 'batch') {
+      if (!runtime.batchLinks || runtime.batchLinks.length === 0) {
+        setStatus('✗ 当前页面未找到产品链接', 'err');
+        return;
+      }
+      runtime.mode = 'batch';
+      setupBatchMode();
+    } else {
+      runtime.mode = 'single';
+      setupSingleMode();
+    }
+  }
+
+  ui.btnToggle.onclick = () => {
+    switchMode(runtime.mode === 'single' ? 'batch' : 'single');
+  };
+
   // ─── 单品模式逻辑 ────────────────────────────────────────────────────────────
   function setupSingleMode() {
     ui.singleActions.style.display = 'flex';
     ui.batchActions.style.display = 'none';
+    ui.btnToggle.title = '切换到批量模式';
+    ui.btnToggle.textContent = '⇌ Batch';
     ui.status.textContent = '';
     
     // 尝试预抓取一次以显示型号
@@ -297,6 +322,8 @@
     ui.batchActions.style.display = 'flex';
     ui.batchCount.textContent = runtime.batchLinks.length;
     ui.model.textContent = 'Batch Mode';
+    ui.btnToggle.title = '切换到单品模式';
+    ui.btnToggle.textContent = '⇌ Single';
     ui.status.textContent = '';
 
     ui.btnBatchOpen.onclick = openBatchModal;
