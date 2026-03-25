@@ -296,6 +296,7 @@ class BatchScraper {
     this.sourceTabId = sourceTabId;
     this.currentIndex = 0;
     this.isScraping = true;
+    this._processingUrl = null; // 防止重复触发
 
     // 创建一个后台标签页用于抓取
     const tab = await chrome.tabs.create({ active: false, url: 'about:blank' });
@@ -336,13 +337,17 @@ class BatchScraper {
   async handleTabUpdate(tabId, changeInfo, tab) {
     if (tabId !== this.workerTabId || changeInfo.status !== 'complete') return;
 
-    // 轮询等待各厂商规格表渲染完毕，每 300ms 检查一次，最多等 8 秒
+    // 防止同一 URL 的多次 complete 事件重复触发（iframe、重定向等）
+    if (this._processingUrl === tab.url) return;
+    this._processingUrl = tab.url;
+
+    // 把轮询放进页面自己的 JS 上下文执行，避免反复 round-trip executeScript
     const READY_SELECTORS = {
       'supermicro': '.spec-table-1, .key-feature-list',
       'gigabyte':   '#Section-Specifications .SpecItem',
       'aorus':      '.tableDataBox',
       'asus':       '.spec-section, .techspec-table',
-      'intel':      '.spec-label, .specs-section',
+      'intel':      '.tech-section-row',
     };
     const POLL_INTERVAL = 300;
     const POLL_TIMEOUT  = 8000;
@@ -361,16 +366,23 @@ class BatchScraper {
         return;
       }
 
-      const deadline = Date.now() + POLL_TIMEOUT;
-      while (Date.now() < deadline) {
-        const found = await chrome.scripting.executeScript({
-          target: { tabId: this.workerTabId },
-          func: (sel) => !!document.querySelector(sel),
-          args: [selector]
-        }).then(r => r[0]?.result).catch(() => false);
-        if (found) return;
-        await new Promise(r => setTimeout(r, POLL_INTERVAL));
-      }
+      // 单次 executeScript：在页面内部轮询，不再反复跨进程通信
+      await chrome.scripting.executeScript({
+        target: { tabId: this.workerTabId },
+        func: (sel, interval, timeout) => {
+          return new Promise(resolve => {
+            if (document.querySelector(sel)) { resolve(); return; }
+            const deadline = Date.now() + timeout;
+            const timer = setInterval(() => {
+              if (document.querySelector(sel) || Date.now() >= deadline) {
+                clearInterval(timer);
+                resolve();
+              }
+            }, interval);
+          });
+        },
+        args: [selector, POLL_INTERVAL, POLL_TIMEOUT]
+      }).catch(() => {});
     })();
 
     try {
