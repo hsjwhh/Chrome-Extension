@@ -3,7 +3,11 @@ window.parseIntel = function parseIntel() {
   // ─── 工具函数 ────────────────────────────────────────────────────────────
   function clean(value) {
     return String(value || '')
-      .replace(/[®™†‡]/g, '')
+      .replace(/[®™†‡*]/g, '')
+      // 品牌词中英互换与基础清理
+      .replace(/英特尔/g, 'Intel')
+      .replace(/至强/g, 'Xeon')
+      .replace(/\s+(?:Processor|处理器)$/i, '')
       .replace(/\s*[\(（](?:[^)）]*cache[^)）]*|[^)）]*高速缓存[^)）]*|[^)）]*up to[^)）]*|[^)）]*高达[^)）]*)[\)）]\s*$/i, '')
       .replace(/\s+/g, ' ')
       .trim();
@@ -84,13 +88,6 @@ window.parseIntel = function parseIntel() {
   }
 
   // 构建 label → value 映射
-  // 页面结构：.specs-section-title 下的 ul/li，每个 li 含
-  //   .label span 和 .value span（或直接文本）
-  // 实际 DOM：
-  //   <li>
-  //     <span class="label">内核数</span>
-  //     <span class="value">18</span>
-  //   </li>
   function buildSpecMap() {
     const map = {};
     const text = document.body.innerText;
@@ -181,18 +178,27 @@ window.parseIntel = function parseIntel() {
     scalability:        ''
   };
 
-  // ─── CPU 名称（兼容 h1、结构化数据、meta 和面包屑） ───────────────────────
-  result.cpu_name = extractIntelProductName();
-
   const specMap = buildSpecMap();
 
-  // 处理器简称：从全名中提取，保留品牌 (Intel)，剥离产品词 (Processor/处理器)
-  result.cpu_short_name = result.cpu_name
-    .replace(/\s+(?:Processor|处理器)$/i, '')
-    .trim();
+  // ─── 处理器名称深度处理 (极致精简逻辑) ──────────────────────────────────
+  
+  let rawName = extractIntelProductName();
+  
+  // 1. cpu_name: 基础标准化 (Intel Xeon 6430 / Intel i9-14900K)
+  let cn = rawName;
+  // 移除至强分级词 (Platinum/Gold/Silver/Bronze)
+  cn = cn.replace(/(Intel\s+Xeon)\s+(?:Platinum|Gold|Silver|Bronze)\s+/i, '$1 ');
+  // 移除酷睿中间词 (Core / Core Ultra)
+  cn = cn.replace(/Intel\s+Core\s+(?:Ultra\s+)?/i, 'Intel ');
+  result.cpu_name = cn;
 
-  // cpu_s_name 处理规则：英文全部小写、去除所有空格
-  result.cpu_s_name = result.cpu_short_name.toLowerCase().replace(/\s+/g, '');
+  // 2. cpu_short_name: 厂商 + 型号 (Intel 6430 / Intel i9-14900K)
+  // 在 cpu_name 基础上进一步移除 Xeon 等系列词，仅保留品牌和核心型号
+  let sn = cn.replace(/Intel\s+(?:Xeon|Ultra)\s+/i, 'Intel ');
+  result.cpu_short_name = sn;
+
+  // 3. cpu_s_name: 索引专用名 (intel6430 / inteli914900k)
+  result.cpu_s_name = result.cpu_short_name.toLowerCase().replace(/[^a-z0-9]/g, '');
 
   // ─── 直接映射字段 ─────────────────────────────────────────────────────────
   result.release_date = pickSpec(specMap, ['发行日期', 'Launch Date']);
@@ -268,7 +274,6 @@ window.parseIntel = function parseIntel() {
 
   // scalability: 简化 "1S Only" → "1S"，其他保留
   const scalRaw = pickSpec(specMap, ['可扩展性', 'Scalability']);
-  result.scalability = scalRaw.replace(/\s*Only$/i, '').trim();
   result.scalability = scalRaw.replace(/\s*Only$/i, '').trim();
 
   return result;
