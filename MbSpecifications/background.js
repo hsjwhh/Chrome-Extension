@@ -1,3 +1,7 @@
+// 初始化存储访问级别 (MV3 必需)
+// 确保在 Service Worker 启动时立即设置
+chrome.storage.session.setAccessLevel?.({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' });
+
 let authCache = new Map();
 const STORAGE_KEYS = {
   tokenPrefix: "mbScraper.token."
@@ -34,23 +38,31 @@ function normalizeConfig(config) {
 }
 
 async function apiRequest(baseUrl, path, options = {}) {
-  const response = await fetch(`${baseUrl}${path}`, options);
-
-  const text = await response.text();
-  let data = null;
   try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = null;
-  }
+    const response = await fetch(`${baseUrl}${path}`, options);
+    const text = await response.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = null;
+    }
 
-  if (!response.ok) {
-    const err = new Error(data?.message || `HTTP ${response.status}`);
-    err.status = response.status;
-    throw err;
+    if (!response.ok) {
+      const err = new Error(data?.message || `HTTP ${response.status}`);
+      err.status = response.status;
+      throw err;
+    }
+    return data;
+  } catch (e) {
+    console.error(`[API Error] ${path}:`, e);
+    // 明确区分网络错误和 API 业务错误
+    const finalErr = new Error(e.message === 'Failed to fetch' 
+      ? `无法连接到 API 服务器 (${baseUrl})，请检查网络或后端状态。`
+      : e.message);
+    finalErr.status = e.status;
+    throw finalErr;
   }
-
-  return data;
 }
 
 function storageSessionGet(keys) {
@@ -123,7 +135,6 @@ async function authorizedRequest(config, path, options = {}) {
       return await apiRequest(normalized.baseUrl, path, { ...options, headers });
     } catch (e) {
       if (e.status === 401 && !isRetry) {
-        // 清除缓存，下次 getAccessToken 会重新登录
         const cacheKey = getConfigKey(normalized);
         const storageKey = getTokenStorageKey(normalized);
         authCache.delete(cacheKey);
@@ -140,12 +151,8 @@ async function authorizedRequest(config, path, options = {}) {
 async function checkMotherboard(payload) {
   const config = normalizeConfig(payload?.apiConfig);
   const model = String(payload?.model || "").trim();
-  if (!model) {
-    throw new Error("missing_model");
-  }
-  if (model.length < 4) {
-    throw new Error("model_too_short");
-  }
+  if (!model) throw new Error("missing_model");
+  if (model.length < 4) throw new Error("model_too_short");
 
   const results = await authorizedRequest(
     config,
@@ -155,15 +162,16 @@ async function checkMotherboard(payload) {
   const targetModel = normalizeModel(model);
   const targetUrl = String(payload?.url || "").trim();
   const existing = Array.isArray(results)
-    ? results.find(item =>
-      normalizeModel(item?.model) === targetModel ||
-      (targetUrl && String(item?.url || "").trim() === targetUrl)
-    ) || null
+    ? results.find(item => {
+      const val = typeof item === 'string' ? item : item?.model;
+      const url = typeof item === 'string' ? null : item?.url;
+      return normalizeModel(val) === targetModel || (targetUrl && url === targetUrl);
+    }) || null
     : null;
 
   return {
     exists: Boolean(existing),
-    existing,
+    existing: typeof existing === 'string' ? { model: existing } : existing,
     candidates: Array.isArray(results) ? results : []
   };
 }
@@ -180,12 +188,8 @@ async function createMotherboard(payload) {
 async function checkCpu(payload) {
   const config = normalizeConfig(payload?.apiConfig);
   const cpuSName = normalizeModel(payload?.cpu_s_name);
-  if (!cpuSName) {
-    throw new Error("missing_cpu_name");
-  }
-  if (cpuSName.length < 4) {
-    throw new Error("cpu_name_too_short");
-  }
+  if (!cpuSName) throw new Error("missing_cpu_name");
+  if (cpuSName.length < 4) throw new Error("cpu_name_too_short");
 
   const results = await authorizedRequest(
     config,
@@ -193,15 +197,16 @@ async function checkCpu(payload) {
   );
 
   const existing = Array.isArray(results)
-    ? results.find(item =>
-      normalizeModel(item?.cpu_s_name) === cpuSName ||
-      normalizeModel(item?.cpu_name) === cpuSName
-    ) || null
+    ? results.find(item => {
+      const sName = typeof item === 'string' ? item : item?.cpu_s_name;
+      const fullName = typeof item === 'string' ? null : item?.cpu_name;
+      return normalizeModel(sName) === cpuSName || normalizeModel(fullName) === cpuSName;
+    }) || null
     : null;
 
   return {
     exists: Boolean(existing),
-    existing,
+    existing: typeof existing === 'string' ? { cpu_s_name: existing } : existing,
     candidates: Array.isArray(results) ? results : []
   };
 }
@@ -286,7 +291,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: false, reason: e.message });
       }
     })();
-
     return true;
   }
 
@@ -299,7 +303,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: false, reason: e.message || "check_failed" });
       }
     })();
-
     return true;
   }
 
@@ -312,7 +315,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: false, reason: e.message || "create_failed" });
       }
     })();
-
     return true;
   }
 
@@ -325,7 +327,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: false, reason: e.message || "check_failed" });
       }
     })();
-
     return true;
   }
 
@@ -338,7 +339,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: false, reason: e.message || "create_failed" });
       }
     })();
-
     return true;
   }
 
@@ -351,7 +351,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: false, reason: e.message || "clear_auth_failed" });
       }
     })();
-
     return true;
   }
 });

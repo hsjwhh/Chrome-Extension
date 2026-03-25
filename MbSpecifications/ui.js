@@ -468,11 +468,11 @@
       return {
         type: 'cpu',
         label: 'CPU',
-        keyField: 'cpu_name',
-        keyFieldLabel: 'CPU名称',
+        keyField: 'cpu_s_name',
+        keyFieldLabel: '标准化型号',
         checkAction: 'checkCpu',
         createAction: 'createCpu',
-        createSuccessText: '✓ 已写入 CPU 库',
+        createSuccessText: '✓ 已写入 CPU库',
         existsText: existing => `✓ 已存在：${existing?.cpu_name || result.cpu_name}`,
         modalTitle: 'CPU 映射审核',
         modalDesc: '库中未找到当前 CPU。请确认抓取字段与入库字段的映射，必要时可以直接修改后再提交。',
@@ -729,9 +729,8 @@
         entityConfig.checkAction,
         currentApiConfig => ({
           apiConfig: currentApiConfig,
-          model: payload.model,
-          url: payload.url,
-          cpu_s_name: payload.cpu_s_name
+          [entityConfig.keyField]: payload[entityConfig.keyField],
+          url: payload.url
         })
       );
 

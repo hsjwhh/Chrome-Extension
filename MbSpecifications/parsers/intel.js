@@ -4,11 +4,14 @@ window.parseIntel = function parseIntel() {
   function clean(value) {
     return String(value || '')
       .replace(/[®™†‡*]/g, '')
-      // 品牌词中英互换与基础清理
+      // 品牌词/系列词中英互换与基础清理
       .replace(/英特尔/g, 'Intel')
       .replace(/至强/g, 'Xeon')
-      .replace(/\s+(?:Processor|处理器)$/i, '')
-      .replace(/\s*[\(（](?:[^)）]*cache[^)）]*|[^)）]*高速缓存[^)）]*|[^)）]*up to[^)）]*|[^)）]*高达[^)）]*)[\)）]\s*$/i, '')
+      .replace(/酷睿/g, 'Core')
+      // 移除冗余词汇 (全局移除，处理如 "i9 处理器 14900" 的情况)
+      .replace(/\s*(?:Processor|处理器)\s*/gi, ' ')
+      // 移除尾部的规格描述 (如 36M Cache, up to 5.80 GHz 等)，兼容有无括号
+      .replace(/\s*(?:[\(（]|\b)(?:\d+M\s+)?(?:cache|高速缓存|up to|高达|睿频频率|ghz).*$/i, '')
       .replace(/\s+/g, ' ')
       .trim();
   }
@@ -141,13 +144,14 @@ window.parseIntel = function parseIntel() {
       ['PCI Express 通道数的最大值', 'Max # of PCI Express Lanes'],
       ['可扩展性', 'Scalability'],
       ['Performance-core（性能核）基本频率', 'Performance-core Base Frequency', '处理器基本频率', 'Processor Base Frequency'],
-      ['处理器显卡', '显卡名称', '嵌入式显卡', 'Processor Graphics', 'Graphics Model', 'GPU Name'],
+      ['处理器显卡', '显卡名称', '嵌入式显卡', 'GPU Name', 'Processor Graphics', 'Graphics Model'],
       ['SKU']
     ];
     keywordGroups.forEach(group => {
       if (group.some(k => map[k])) return;
       for (const kw of group) {
-        const regex = new RegExp(escapeRegExp(kw) + '[\\s\\n]+([^\\n]{1,100})', 'i');
+        // 改进正则：允许关键词后面跟随特殊符号（如 ‡, *, 注册商标等）再接换行/空格
+        const regex = new RegExp(escapeRegExp(kw) + '[^\\n\\w\\u4e00-\\u9fa5]*[\\s\\n]+([^\\n]{1,100})', 'i');
         const match = text.match(regex);
         if (match) {
           map[group[0]] = clean(match[1]);
@@ -188,20 +192,33 @@ window.parseIntel = function parseIntel() {
   
   let rawName = extractIntelProductName();
   
-  // 1. cpu_name: 基础标准化 (Intel Xeon 6430 / Intel i9-14900K)
+  // 1. cpu_name: 基础标准化 (Intel Xeon 6430 / Intel i9-14900 / Intel Ultra 9 285K)
   let cn = rawName;
-  // 移除至强分级词 (Platinum/Gold/Silver/Bronze)
+  // 移除至强分级词
   cn = cn.replace(/(Intel\s+Xeon)\s+(?:Platinum|Gold|Silver|Bronze)\s+/i, '$1 ');
-  // 移除酷睿中间词 (Core / Core Ultra)
-  cn = cn.replace(/Intel\s+Core\s+(?:Ultra\s+)?/i, 'Intel ');
+  
+  if (/Intel\s+Core\s+(i[3579])(?:[- ]?)\s*(.*)/i.test(cn)) {
+    // 强制 Core i 系列带横杠: Intel i9-14900
+    cn = cn.replace(/Intel\s+Core\s+(i[3579])(?:[- ]?)\s*(.*)/i, 'Intel $1-$2');
+  } else if (/Intel\s+Core\s+Ultra\s+([3579])\s+(.*)/i.test(cn)) {
+    // Core Ultra 系列: Intel Ultra 9 285K
+    cn = cn.replace(/Intel\s+Core\s+Ultra\s+([3579])\s+(.*)/i, 'Intel Ultra $1 $2');
+  } else {
+    // 其他情况移除 Core 中间词
+    cn = cn.replace(/Intel\s+Core\s+/i, 'Intel ');
+  }
   result.cpu_name = cn;
 
-  // 2. cpu_short_name: 厂商 + 型号 (Intel 6430 / Intel i9-14900K)
-  // 在 cpu_name 基础上进一步移除 Xeon 等系列词，仅保留品牌和核心型号
-  let sn = cn.replace(/Intel\s+(?:Xeon|Ultra)\s+/i, 'Intel ');
+  // 2. cpu_short_name: 核心展示名 (Intel 6430 / Intel i9-14900 / Intel Ultra 9 285K)
+  // 对于至强系列，进一步移除 "Xeon" 以达到极致精简 (Intel 6430)
+  // 对于酷睿系列，保留级别词 iX / Ultra X 以增强辨识度 (Intel i9-14900)
+  let sn = cn;
+  if (/Intel\s+Xeon\s+/i.test(cn)) {
+    sn = cn.replace(/Intel\s+Xeon\s+/i, 'Intel ');
+  }
   result.cpu_short_name = sn;
 
-  // 3. cpu_s_name: 索引专用名 (intel6430 / inteli914900k)
+  // 3. cpu_s_name: 索引专用名 (intel6430 / inteli914900 / intelultra9285k)
   result.cpu_s_name = result.cpu_short_name.toLowerCase().replace(/[^a-z0-9]/g, '');
 
   // ─── 直接映射字段 ─────────────────────────────────────────────────────────
@@ -282,18 +299,17 @@ window.parseIntel = function parseIntel() {
 
   // ─── 新增字段：GPU ────────────────────────────────────────────────────────
   result.gpu = pickSpec(specMap, [
-    '处理器显卡', '显卡名称', '嵌入式显卡', 
-    'Processor Graphics', 'Graphics Model', 'GPU Name'
+    '处理器显卡', '显卡名称', '嵌入式显卡', 'GPU Name', 
+    'Processor Graphics', 'Graphics Model'
   ]);
 
   // ─── 新增字段：SKU ────────────────────────────────────────────────────────
-  const skuFromMap = pickSpec(specMap, ['SKU']);
-  if (skuFromMap) {
-    result.sku = skuFromMap;
+  // 优先从 URL 提取，因为 URL 中的 SKU 是最可靠的身份标识
+  const urlSkuMatch = location.href.match(/[/-]sku[/-](\d+)(?:[/-]|$)/i);
+  if (urlSkuMatch) {
+    result.sku = urlSkuMatch[1];
   } else {
-    // 从 URL 提取，例如 .../sku/236793/...
-    const skuMatch = location.href.match(/\/sku\/(\d+)\//);
-    if (skuMatch) result.sku = skuMatch[1];
+    result.sku = pickSpec(specMap, ['SKU']);
   }
 
   return result;
