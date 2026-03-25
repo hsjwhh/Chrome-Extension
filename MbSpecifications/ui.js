@@ -18,8 +18,8 @@
     { apiKey: 'url', label: '页面URL', sourceKey: 'URL', multiline: true }
   ];
   const CPU_FIELD_CONFIG = [
-    { apiKey: 'cpu_s_name', label: '标准化型号', sourceKey: '__cpu_s_name' },
-    { apiKey: 'cpu_short_name', label: 'CPU简称', sourceKey: '__cpu_short_name' },
+    { apiKey: 'cpu_s_name', label: '标准化型号', sourceKey: 'cpu_s_name' },
+    { apiKey: 'cpu_short_name', label: 'CPU简称', sourceKey: 'cpu_short_name' },
     { apiKey: 'cpu_name', label: 'CPU名称', sourceKey: 'cpu_name', multiline: true },
     { apiKey: 'release_date', label: '发行日期', sourceKey: 'release_date' },
     { apiKey: 'cores', label: '内核数', sourceKey: 'cores' },
@@ -34,7 +34,9 @@
     { apiKey: 'ecc_support', label: 'ECC支持', sourceKey: 'ecc_support' },
     { apiKey: 'socket', label: '封装', sourceKey: 'socket' },
     { apiKey: 'pci', label: 'PCI信息', sourceKey: 'pci' },
-    { apiKey: 'scalability', label: '可扩展性', sourceKey: 'scalability' }
+    { apiKey: 'scalability', label: '可扩展性', sourceKey: 'scalability' },
+    { apiKey: 'gpu', label: '集显型号', sourceKey: 'gpu' },
+    { apiKey: 'sku', label: 'SKU', sourceKey: 'sku' }
   ];
   const DEFAULT_API_BASE_URL = 'http://localhost:3000';
   const STORAGE_KEYS = {
@@ -661,11 +663,6 @@
       setStatus('✗ 无数据', 'err');
       setBusy(false);
       return null;
-    }
-
-    if (result.cpu_name) {
-      result.__cpu_s_name = normalizeKeyword(result.cpu_name);
-      result.__cpu_short_name = buildCpuShortName(result.cpu_name);
     }
 
     // 只有在抓取到有效信息（如 cpu_name 或 Model）时才缓存

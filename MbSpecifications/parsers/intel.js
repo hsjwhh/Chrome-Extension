@@ -140,7 +140,9 @@ window.parseIntel = function parseIntel() {
       ['PCI Express 修订版', 'PCI Express Revision'],
       ['PCI Express 通道数的最大值', 'Max # of PCI Express Lanes'],
       ['可扩展性', 'Scalability'],
-      ['Performance-core（性能核）基本频率', 'Performance-core Base Frequency', '处理器基本频率', 'Processor Base Frequency']
+      ['Performance-core（性能核）基本频率', 'Performance-core Base Frequency', '处理器基本频率', 'Processor Base Frequency'],
+      ['处理器显卡', '显卡名称', '嵌入式显卡', 'Processor Graphics', 'Graphics Model', 'GPU Name'],
+      ['SKU']
     ];
     keywordGroups.forEach(group => {
       if (group.some(k => map[k])) return;
@@ -175,7 +177,9 @@ window.parseIntel = function parseIntel() {
     ecc_support:        '',
     socket:             '',
     pci:                '',
-    scalability:        ''
+    scalability:        '',
+    gpu:                '',
+    sku:                ''
   };
 
   const specMap = buildSpecMap();
@@ -275,6 +279,22 @@ window.parseIntel = function parseIntel() {
   // scalability: 简化 "1S Only" → "1S"，其他保留
   const scalRaw = pickSpec(specMap, ['可扩展性', 'Scalability']);
   result.scalability = scalRaw.replace(/\s*Only$/i, '').trim();
+
+  // ─── 新增字段：GPU ────────────────────────────────────────────────────────
+  result.gpu = pickSpec(specMap, [
+    '处理器显卡', '显卡名称', '嵌入式显卡', 
+    'Processor Graphics', 'Graphics Model', 'GPU Name'
+  ]);
+
+  // ─── 新增字段：SKU ────────────────────────────────────────────────────────
+  const skuFromMap = pickSpec(specMap, ['SKU']);
+  if (skuFromMap) {
+    result.sku = skuFromMap;
+  } else {
+    // 从 URL 提取，例如 .../sku/236793/...
+    const skuMatch = location.href.match(/\/sku\/(\d+)\//);
+    if (skuMatch) result.sku = skuMatch[1];
+  }
 
   return result;
 };
