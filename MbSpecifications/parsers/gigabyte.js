@@ -48,7 +48,7 @@ window.parseGigabyte = function parseGigabyte(doc = document) {
   });
 
   // ─── CPU ──────────────────────────────────────────────────────────────────
-  const cpuRaw    = specMap["Processor Supported"] || '';
+  const cpuRaw    = specMap["Processor Supported"] || specMap["CPU"] || '';
   const cpuSocket = specMap["Socket"] || '';
 
   // CPU类型：去备注行 + cTDP 行（cTDP 数据已提取到最大TDP）
@@ -68,7 +68,7 @@ window.parseGigabyte = function parseGigabyte(doc = document) {
   if (tdpMatch) result.最大TDP = tdpMatch[1];
 
   // ─── 内存 ─────────────────────────────────────────────────────────────────
-  const memRaw = specMap["Memory Type"] || '';
+  const memRaw = specMap["Memory Type"] || specMap["Memory"] || '';
 
   const dimmMatch = memRaw.match(/(\d+)\s*x\s*DIMM/i);
   if (dimmMatch) result.DIMM数量 = dimmMatch[1];
@@ -83,7 +83,7 @@ window.parseGigabyte = function parseGigabyte(doc = document) {
   result.内存类型 = flatten(memRaw);
 
   // ─── PCI ──────────────────────────────────────────────────────────────────
-  const pcieRaw = specMap["PCIe Expansion Slots"] || '';
+  const pcieRaw = specMap["PCIe Expansion Slots"] || specMap["Expansion Slots"] || '';
 
   // 只统计明确写 "Slot_N: PCIe" 或 "N x PCIe" 格式的行，排除 MCIO/备注
   const slotCount = pcieRaw
@@ -96,15 +96,16 @@ window.parseGigabyte = function parseGigabyte(doc = document) {
   result.PCI分布 = flatten(pcieRaw);
 
   // ─── 存储 ─────────────────────────────────────────────────────────────────
-  const storageRaw = specMap["Storage Interface"] || '';
+  const storageRaw = [specMap["Storage Interface"], specMap["SATA"], specMap["SAS"]].filter(Boolean).join('\n');
   result.存储接口 = flatten(storageRaw);
 
   // M.2：提取含 M.2 的数据行，去掉纯标题行（如 "M.2:"）和备注行
-  const m2Lines = storageRaw
+  const m2Source = [storageRaw, pcieRaw, specMap["Internal I/O"]].filter(Boolean).join('\n');
+  const m2Lines = m2Source
     .split('\n')
     .map(l => l.trim())
     .filter(l => /M\.2/i.test(l) && !/^\[/.test(l) && !/^M\.2:$/i.test(l));
-  result.M2 = m2Lines.join(' ; ');
+  result.M2 = [...new Set(m2Lines)].join(' ; ');
 
   return result;
 };
